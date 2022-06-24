@@ -10,13 +10,19 @@ type Config struct {
   *config.BaseConfig
 }
 
+func (c *Config) Default() {
+  if c.BaseConfig == nil {
+    c.BaseConfig = &config.BaseConfig{}
+  }
+}
+
 func main() {
   cli.New(
     cli.WithName("gdk-example-app"),
     cli.WithUsage("GDK example application"),
     cli.WithDescription("Example application showing features of GDK"),
     cli.WithConfigTools(
-      &Config{BaseConfig: &config.BaseConfig{}},
+      &Config{},
       config.YamlUnmarshaler,
       config.YamlMarshaler,
     ),
