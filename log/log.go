@@ -42,6 +42,7 @@ func Trace() *Event                                { return log.Trace() }
 func UpdateContext(update func(c Context) Context) { log.UpdateContext(update) }
 func Warn() *Event                                 { return log.Warn() }
 func WithLevel(level Level) *Event                 { return log.WithLevel(level) }
+func With() Context                                { return log.With() }
 
 //
 

@@ -306,7 +306,11 @@ func WithHttpTools(cfg func() *http.Config, router *http.Router) Option {
 
 						return http.New(
 							http.WithAddress(address),
-							http.WithHandler(http.Log(router)),
+							http.WithHandler(http.Compose(
+								router,
+								http.Trace,
+								http.Recover,
+							)),
 						).ListenAndServe()
 					},
 				},

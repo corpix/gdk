@@ -43,7 +43,13 @@ func main() {
 			config.YamlMarshaler,
 		),
 		cli.WithLogTools(cfg.LogConfig),
-		cli.WithHttpTools(cfg.HttpConfig, http.NewRouter()),
+		cli.WithHttpTools(cfg.HttpConfig, http.NewRouter(
+			func (r *http.Router) {
+				r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+					panic("hello panic")
+				})
+			},
+		)),
 		cli.WithAction(func(ctx *cli.Context) error {
 			log.Info().Str("msg", "hello").Msg("greeting")
 			return nil

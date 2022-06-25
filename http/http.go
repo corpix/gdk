@@ -11,8 +11,10 @@ type (
 	Option         func(*Http)
 	Handler        = http.Handler
 	HandlerFunc    = http.HandlerFunc
+	Middleware     = func(Handler) Handler
 	Request        = http.Request
 	ResponseWriter = http.ResponseWriter
+	ContextKey     uint8
 	Response       = http.Response
 	Http           struct {
 		Address string
@@ -26,7 +28,7 @@ type Config struct {
 
 func (c *Config) Validate() error {
 	if c.Address == "" {
-		//return errors.New("address should not be empty")
+		return errors.New("address should not be empty")
 	}
 	return nil
 }
@@ -41,6 +43,18 @@ func WithHandler(hr Handler) Option {
 	return func(h *Http) {
 		h.Handler = hr
 	}
+}
+
+func Compose(handler Handler, middlewares ...Middleware) Handler {
+	var (
+		middlewaresLen = len(middlewares)
+		middleware Middleware
+	)
+	for n := range middlewares {
+		middleware = middlewares[middlewaresLen - 1 - n]
+		handler = middleware(handler)
+	}
+	return handler
 }
 
 func (h *Http) ListenAndServe() error {
