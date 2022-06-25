@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/corpix/gdk/config"
+	"github.com/corpix/gdk/http"
 	"github.com/corpix/gdk/log"
 
 	cli "github.com/urfave/cli/v2"
@@ -138,7 +139,7 @@ func WithAction(fn ActionFunc) Option {
 
 //
 
-func ConfigFromContext (ctx *Context, cfg Config, unmarshaler config.Unmarshaler) error {
+func ConfigFromContext(ctx *Context, cfg Config, unmarshaler config.Unmarshaler) error {
 	paths := ctx.StringSlice("config")
 	sources := make([]config.Option, len(paths))
 
@@ -156,7 +157,7 @@ func ConfigFromContext (ctx *Context, cfg Config, unmarshaler config.Unmarshaler
 func WithConfigTools(cfg Config, unmarshaler config.Unmarshaler, marshaler config.Marshaler) Option {
 	return WithComposition(
 		WithConfig(cfg),
-		WithBefore(func (ctx *Context) error  {
+		WithBefore(func(ctx *Context) error {
 			err := ConfigFromContext(ctx, cfg, unmarshaler)
 			if err != nil {
 				return err
@@ -257,7 +258,7 @@ func WithConfigTools(cfg Config, unmarshaler config.Unmarshaler, marshaler confi
 	)
 }
 
-func WithLogTools() Option {
+func WithLogTools(cfg func () *log.Config) Option {
 	return WithComposition(
 		WithFlags(Flags{
 			&StringFlag{
@@ -266,19 +267,52 @@ func WithLogTools() Option {
 				Usage:   "logging level (debug, info, warn, error)",
 			},
 		}),
-		func (c *Cli) {
+		func(c *Cli) {
 			WithBefore(func(ctx *Context) error {
 				level := ctx.String("log-level")
 				if level == "" {
-					logConfig := log.Config{}
-					_ = c.Config.Path(&logConfig, "Log")
-					level = logConfig.Level
+					level = cfg().Level
 				}
 
 				return log.Init(level)
 			})(c)
 		},
 	)
+}
+
+func WithHttpTools(cfg func() *http.Config, router *http.Router) Option {
+	return func(c *Cli) {
+		c.Commands = append(c.Commands, &Command{
+			Name:    "http",
+			Aliases: []string{"ht"},
+			Usage:   "HTTP server tools",
+			Flags: Flags{
+				&StringFlag{
+					Name:    "address",
+					Aliases: []string{"a"},
+					Usage:   "address:port to listen on",
+				},
+			},
+			Subcommands: Commands{
+				&Command{
+					Name:    "serve",
+					Aliases: []string{"s"},
+					Usage:   "Run server listener",
+					Action: func(ctx *Context) error {
+						address := ctx.String("address")
+						if address == "" {
+							address = cfg().Address
+						}
+
+						return http.New(
+							http.WithAddress(address),
+							http.WithHandler(http.Log(router)),
+						).ListenAndServe()
+					},
+				},
+			},
+		})
+	}
 }
 
 func New(options ...Option) *Cli {

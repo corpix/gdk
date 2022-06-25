@@ -2,8 +2,6 @@ package config
 
 import (
 	"github.com/corpix/revip"
-
-	"github.com/corpix/gdk/log"
 )
 
 type (
@@ -23,20 +21,6 @@ type (
 	Unmarshaler         = revip.Unmarshaler
 	Validatable         = revip.Validatable
 )
-
-//
-
-type BaseConfig struct {
-	Log *log.Config `yaml:"log"`
-}
-
-func (c *BaseConfig) Default() {
-	if c.Log == nil {
-		c.Log = &log.Config{}
-	}
-}
-
-//
 
 const (
 	PathDelimiter = revip.PathDelimiter

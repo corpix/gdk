@@ -6,6 +6,8 @@ require (
 	github.com/cockroachdb/errors v1.9.0
 	github.com/corpix/revip v0.0.0-20220623235520-adbcca96fe0c
 	github.com/cristalhq/jwt/v4 v4.0.1
+	github.com/felixge/httpsnoop v1.0.3
+	github.com/gorilla/mux v1.8.0
 	github.com/klauspost/compress v1.15.6
 	github.com/mattn/go-isatty v0.0.14
 	github.com/rs/zerolog v1.27.0
@@ -32,6 +34,6 @@ require (
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
-	golang.org/x/sys v0.0.0-20220209214540-3681064d5158 // indirect
+	golang.org/x/sys v0.0.0-20220227234510-4e6760a101f9 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )
