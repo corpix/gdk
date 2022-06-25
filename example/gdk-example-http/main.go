@@ -44,7 +44,7 @@ func main() {
 		),
 		cli.WithLogTools(cfg.LogConfig),
 		cli.WithHttpTools(cfg.HttpConfig, http.NewRouter(
-			func (r *http.Router) {
+			func(r *http.Router) {
 				r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 					w.Write([]byte("hello"))
 				})

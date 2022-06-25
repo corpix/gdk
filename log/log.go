@@ -29,22 +29,22 @@ const (
 	LevelFatal = zerolog.FatalLevel
 )
 
-var log Logger
+var Default Logger
 
-func Debug() *Event                                { return log.Debug() }
-func Err(err error) *Event                         { return log.Err(err) }
-func Error() *Event                                { return log.Error() }
-func Fatal() *Event                                { return log.Fatal() }
-func Info() *Event                                 { return log.Info() }
-func Log() *Event                                  { return log.Log() }
-func Panic() *Event                                { return log.Panic() }
-func Print(v ...interface{})                       { log.Print(v...) }
-func Printf(format string, v ...interface{})       { log.Printf(format, v...) }
-func Trace() *Event                                { return log.Trace() }
-func UpdateContext(update func(c Context) Context) { log.UpdateContext(update) }
-func Warn() *Event                                 { return log.Warn() }
-func WithLevel(level Level) *Event                 { return log.WithLevel(level) }
-func With() Context                                { return log.With() }
+func Debug() *Event                                { return Default.Debug() }
+func Err(err error) *Event                         { return Default.Err(err) }
+func Error() *Event                                { return Default.Error() }
+func Fatal() *Event                                { return Default.Fatal() }
+func Info() *Event                                 { return Default.Info() }
+func Log() *Event                                  { return Default.Log() }
+func Panic() *Event                                { return Default.Panic() }
+func Print(v ...interface{})                       { Default.Print(v...) }
+func Printf(format string, v ...interface{})       { Default.Printf(format, v...) }
+func Trace() *Event                                { return Default.Trace() }
+func UpdateContext(update func(c Context) Context) { Default.UpdateContext(update) }
+func Warn() *Event                                 { return Default.Warn() }
+func WithLevel(level Level) *Event                 { return Default.WithLevel(level) }
+func With() Context                                { return Default.With() }
 
 //
 
@@ -106,7 +106,7 @@ func Init(level string, options ...Option) error {
 		return err
 	}
 
-	log = l
+	Default = l
 
 	return nil
 }

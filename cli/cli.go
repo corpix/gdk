@@ -7,6 +7,7 @@ import (
 	"github.com/corpix/gdk/config"
 	"github.com/corpix/gdk/http"
 	"github.com/corpix/gdk/log"
+	"github.com/corpix/gdk/telemetry"
 
 	cli "github.com/urfave/cli/v2"
 )
@@ -311,6 +312,7 @@ func WithHttpTools(cfg func() *http.Config, router *http.Router, options ...http
 								http.Trace,
 								http.Recover,
 							)),
+							http.WithTelemetry(telemetry.Default, router),
 						}
 						httpOptions = append(httpOptions, options...)
 						return http.New(httpOptions...).ListenAndServe()
