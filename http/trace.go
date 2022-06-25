@@ -24,11 +24,6 @@ func RequestId(r *Request) string {
 		return ctxRequestId.(string)
 	}
 
-	requestId := r.Header.Get(HeaderRequestId)
-	if requestId != "" {
-		return requestId
-	}
-
 	return uuid.New().String()
 }
 
