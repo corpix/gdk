@@ -258,7 +258,7 @@ func WithConfigTools(cfg Config, unmarshaler config.Unmarshaler, marshaler confi
 	)
 }
 
-func WithLogTools(cfg func () *log.Config) Option {
+func WithLogTools(cfg func() *log.Config, options ...log.Option) Option {
 	return WithComposition(
 		WithFlags(Flags{
 			&StringFlag{
@@ -274,13 +274,13 @@ func WithLogTools(cfg func () *log.Config) Option {
 					level = cfg().Level
 				}
 
-				return log.Init(level)
+				return log.Init(level, options...)
 			})(c)
 		},
 	)
 }
 
-func WithHttpTools(cfg func() *http.Config, router *http.Router) Option {
+func WithHttpTools(cfg func() *http.Config, router *http.Router, options ...http.Option) Option {
 	return func(c *Cli) {
 		c.Commands = append(c.Commands, &Command{
 			Name:    "http",
@@ -304,14 +304,16 @@ func WithHttpTools(cfg func() *http.Config, router *http.Router) Option {
 							address = cfg().Address
 						}
 
-						return http.New(
+						httpOptions := []http.Option{
 							http.WithAddress(address),
 							http.WithHandler(http.Compose(
 								router,
 								http.Trace,
 								http.Recover,
 							)),
-						).ListenAndServe()
+						}
+						httpOptions = append(httpOptions, options...)
+						return http.New(httpOptions...).ListenAndServe()
 					},
 				},
 			},

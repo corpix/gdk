@@ -13,6 +13,7 @@ import (
 type (
 	Level   = zerolog.Level
 	Logger  = zerolog.Logger
+	Option  func(*Logger)
 	Event   = zerolog.Event
 	Context = zerolog.Context
 )
@@ -58,7 +59,7 @@ func (c *Config) Default() {
 
 //
 
-func New(level string) (Logger, error) {
+func New(level string, options ...Option) (Logger, error) {
 	var (
 		output = os.Stdout
 
@@ -86,11 +87,15 @@ func New(level string) (Logger, error) {
 		Timestamp().Logger().
 		Level(logLevel)
 
+	for _, option := range options {
+		option(&log)
+	}
+
 	return log, nil
 }
 
-func Init(level string) error {
-	l, err := New(level)
+func Init(level string, options ...Option) error {
+	l, err := New(level, options...)
 	if err != nil {
 		return err
 	}

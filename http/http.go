@@ -48,10 +48,10 @@ func WithHandler(hr Handler) Option {
 func Compose(handler Handler, middlewares ...Middleware) Handler {
 	var (
 		middlewaresLen = len(middlewares)
-		middleware Middleware
+		middleware     Middleware
 	)
 	for n := range middlewares {
-		middleware = middlewares[middlewaresLen - 1 - n]
+		middleware = middlewares[middlewaresLen-1-n]
 		handler = middleware(handler)
 	}
 	return handler

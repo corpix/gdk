@@ -46,6 +46,9 @@ func main() {
 		cli.WithHttpTools(cfg.HttpConfig, http.NewRouter(
 			func (r *http.Router) {
 				r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+					w.Write([]byte("hello"))
+				})
+				r.HandleFunc("/panic", func(w http.ResponseWriter, r *http.Request) {
 					panic("hello panic")
 				})
 			},
