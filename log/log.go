@@ -6,6 +6,7 @@ import (
 
 	console "github.com/mattn/go-isatty"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/pkgerrors"
 
 	"github.com/corpix/gdk/errors"
 )
@@ -92,6 +93,11 @@ func New(level string, options ...Option) (Logger, error) {
 	}
 
 	return log, nil
+}
+
+func init() {
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnixMs
+	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 }
 
 func Init(level string, options ...Option) error {

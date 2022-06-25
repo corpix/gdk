@@ -20,7 +20,7 @@ func Recover(h Handler) Handler {
 				default:
 					e = errors.New(fmt.Sprint(err))
 				}
-				l.Error().Err(e).Msg("panic recover")
+				l.Error().Stack().Err(e).Msg("panic recover")
 			}
 		}()
 		h.ServeHTTP(w, r)
