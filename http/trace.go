@@ -14,7 +14,19 @@ var (
 	ContextKeyLog       = new(ContextKey)
 )
 
-func RequestId(r *Request) string {
+type TraceConfig struct {
+	SkipPaths map[string]struct{} `yaml:"skip-paths"`
+}
+
+func (c *TraceConfig) Default() {
+	if c.SkipPaths == nil {
+		c.SkipPaths = map[string]struct{}{}
+	}
+}
+
+//
+
+func RequestIdGet(r *Request) string {
 	ctxRequestId := r.Context().Value(ContextKeyRequestId)
 	if ctxRequestId != nil {
 		return ctxRequestId.(string)
@@ -23,7 +35,13 @@ func RequestId(r *Request) string {
 	return uuid.New().String()
 }
 
-func RequestLog(r *Request) log.Logger {
+func RequestIdSet(r *Request, id string) *Request {
+	return r.WithContext(context.WithValue(r.Context(), ContextKeyRequestId, id))
+}
+
+//
+
+func RequestLogGet(r *Request) log.Logger {
 	ctxRequestLog := r.Context().Value(ContextKeyLog)
 	if ctxRequestLog != nil {
 		return ctxRequestLog.(log.Logger)
@@ -35,23 +53,35 @@ func RequestLog(r *Request) log.Logger {
 		Logger()
 }
 
-func Trace(h Handler) Handler {
-	return HandlerFunc(func(w ResponseWriter, r *Request) {
-		requestId := RequestId(r)
-		l := RequestLog(r).
-			With().
-			Str("request-id", requestId).
-			Logger()
+func RequestLogSet(r *Request, l log.Logger) *Request {
+	return r.WithContext(context.WithValue(r.Context(), ContextKeyLog, l))
+}
 
-		r = r.WithContext(context.WithValue(r.Context(), ContextKeyRequestId, requestId))
-		r = r.WithContext(context.WithValue(r.Context(), ContextKeyLog, l))
+//
 
-		m := httpsnoop.CaptureMetrics(h, w, r)
+func Trace(c *TraceConfig) Middleware {
+	return func(next Handler) Handler {
+		return HandlerFunc(func(w ResponseWriter, r *Request) {
+			requestId := RequestIdGet(r)
+			l := RequestLogGet(r).
+				With().
+				Str("request-id", requestId).
+				Logger()
 
-		l.Info().
-			Int("code", m.Code).
-			Int64("written", m.Written).
-			Dur("duration", m.Duration).
-			Msg("request")
-	})
+			r = RequestIdSet(r, requestId)
+			r = RequestLogSet(r, l)
+
+			if _, ok := c.SkipPaths[r.URL.Path]; ok {
+				next.ServeHTTP(w, r)
+			} else {
+				m := httpsnoop.CaptureMetrics(next, w, r)
+
+				l.Info().
+					Int("code", m.Code).
+					Int64("written", m.Written).
+					Dur("duration", m.Duration).
+					Msg("request")
+			}
+		})
+	}
 }

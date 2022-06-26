@@ -7,7 +7,6 @@ require (
 	github.com/corpix/revip v0.0.0-20220623235520-adbcca96fe0c
 	github.com/cristalhq/jwt/v4 v4.0.1
 	github.com/felixge/httpsnoop v1.0.3
-	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.0
 	github.com/klauspost/compress v1.15.6

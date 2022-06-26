@@ -308,10 +308,9 @@ func WithHttpTools(cfg func() *http.Config, router *http.Router, options ...http
 
 						httpOptions := []http.Option{
 							http.WithAddress(address),
-							http.WithHandler(http.Compose(
-								router,
-								http.Trace,
-								http.Recover,
+							http.WithHandler(http.Compose(router,
+								http.Trace(conf.Trace),
+								http.Recover(),
 							)),
 							http.WithMetricsHandler(metrics.Default, router),
 						}

@@ -2,3 +2,6 @@ http:
   address: localhost:8080
   metrics:
     enable: true
+  trace:
+    skip-paths:
+      /metrics: {}

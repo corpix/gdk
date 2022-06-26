@@ -32,7 +32,7 @@ var (
 
 type MetricsConfig struct {
 	Enable    bool   `yaml:"enable"`
-	Log *bool `yaml:"log"`
+	Log       *bool  `yaml:"log"`
 	Path      string `yaml:"path"`
 	TokenType string `yaml:"token-type"`
 	Token     string `yaml:"token"`
@@ -142,7 +142,8 @@ func WithMetricsHandler(r metrics.RegisterGatherer, rr *Router, options ...Metri
 
 		if h.Config.Metrics.Token == "" {
 			// NOTE: TokenFile contents will be loaded into Token field
-			log.Warn().Msg("metrics token is not defined, likely this is not what you want, please define metrics.token or metrics.token-file")
+			log.Warn().
+				Msg("metrics token is not defined, likely this is not what you want, please define metrics.token or metrics.token-file")
 		} else {
 			subr.Use(func(next Handler) Handler {
 				subjectAuthentication := h.Config.Metrics.TokenType + " " + h.Config.Metrics.Token
@@ -156,7 +157,7 @@ func WithMetricsHandler(r metrics.RegisterGatherer, rr *Router, options ...Metri
 						return
 					}
 
-					l := RequestLog(r)
+					l := RequestLogGet(r)
 					l.Warn().Msg("authentication failed, token does not match")
 
 					w.WriteHeader(StatusNotFound)

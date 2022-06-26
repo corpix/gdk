@@ -14,14 +14,38 @@ type (
 	Middleware     = func(Handler) Handler
 	Request        = http.Request
 	ResponseWriter = http.ResponseWriter
-	ContextKey     uint8
 	Response       = http.Response
+	ContextKey     uint8
 	Http           struct {
 		Config  *Config
 		Address string
 		Handler Handler
 	}
 )
+
+type Config struct {
+	Address string         `yaml:"address"`
+	Metrics *MetricsConfig `yaml:"metrics"`
+	Trace   *TraceConfig   `yaml:"trace"`
+}
+
+func (c *Config) Default() {
+	if c.Metrics == nil {
+		c.Metrics = &MetricsConfig{}
+	}
+	if c.Trace == nil {
+		c.Trace = &TraceConfig{}
+	}
+}
+
+func (c *Config) Validate() error {
+	if c.Address == "" {
+		return errors.New("address should not be empty")
+	}
+	return nil
+}
+
+//
 
 const (
 	MethodGet     = http.MethodGet
@@ -44,23 +68,7 @@ const (
 	AuthTokenTypeBearer = "bearer"
 )
 
-type Config struct {
-	Address string         `yaml:"address"`
-	Metrics *MetricsConfig `yaml:"metrics"`
-}
-
-func (c *Config) Default() {
-	if c.Metrics == nil {
-		c.Metrics = &MetricsConfig{}
-	}
-}
-
-func (c *Config) Validate() error {
-	if c.Address == "" {
-		return errors.New("address should not be empty")
-	}
-	return nil
-}
+//
 
 func WithAddress(addr string) Option {
 	return func(h *Http) { h.Address = addr }
