@@ -17,6 +17,7 @@ type (
 	ContextKey     uint8
 	Response       = http.Response
 	Http           struct {
+		Config  *Config
 		Address string
 		Handler Handler
 	}
@@ -34,8 +35,24 @@ const (
 	MethodTrace   = http.MethodTrace
 )
 
+const (
+	HeaderRequestId      = "x-request-id"
+	HeaderAuthentication = "authentication"
+)
+
+const (
+	AuthTokenTypeBearer = "bearer"
+)
+
 type Config struct {
-	Address string `yaml:"address"`
+	Address string         `yaml:"address"`
+	Metrics *MetricsConfig `yaml:"metrics"`
+}
+
+func (c *Config) Default() {
+	if c.Metrics == nil {
+		c.Metrics = &MetricsConfig{}
+	}
 }
 
 func (c *Config) Validate() error {
@@ -46,15 +63,11 @@ func (c *Config) Validate() error {
 }
 
 func WithAddress(addr string) Option {
-	return func(h *Http) {
-		h.Address = addr
-	}
+	return func(h *Http) { h.Address = addr }
 }
 
 func WithHandler(hr Handler) Option {
-	return func(h *Http) {
-		h.Handler = hr
-	}
+	return func(h *Http) { h.Handler = hr }
 }
 
 func Compose(handler Handler, middlewares ...Middleware) Handler {
@@ -80,10 +93,14 @@ func (h *Http) ListenAndServe() error {
 	return http.ListenAndServe(h.Address, h.Handler)
 }
 
-func New(options ...Option) *Http {
-	h := &Http{}
+func New(c *Config, options ...Option) *Http {
+	h := &Http{
+		Config:  c,
+		Address: c.Address,
+	}
 	for _, option := range options {
 		option(h)
 	}
+
 	return h
 }

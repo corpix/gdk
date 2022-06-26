@@ -300,9 +300,10 @@ func WithHttpTools(cfg func() *http.Config, router *http.Router, options ...http
 					Aliases: []string{"s"},
 					Usage:   "Run server listener",
 					Action: func(ctx *Context) error {
+						conf := cfg()
 						address := ctx.String("address")
 						if address == "" {
-							address = cfg().Address
+							address = conf.Address
 						}
 
 						httpOptions := []http.Option{
@@ -312,10 +313,10 @@ func WithHttpTools(cfg func() *http.Config, router *http.Router, options ...http
 								http.Trace,
 								http.Recover,
 							)),
-							http.WithMetrics(metrics.Default, router),
+							http.WithMetricsHandler(metrics.Default, router),
 						}
 						httpOptions = append(httpOptions, options...)
-						return http.New(httpOptions...).ListenAndServe()
+						return http.New(conf, httpOptions...).ListenAndServe()
 					},
 				},
 			},

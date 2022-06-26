@@ -14,10 +14,6 @@ var (
 	ContextKeyLog       = new(ContextKey)
 )
 
-const (
-	HeaderRequestId = "x-request-id"
-)
-
 func RequestId(r *Request) string {
 	ctxRequestId := r.Context().Value(ContextKeyRequestId)
 	if ctxRequestId != nil {

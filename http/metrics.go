@@ -1,8 +1,13 @@
 package http
 
 import (
+	"crypto/subtle"
+	"io/ioutil"
+	"strings"
+
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/corpix/gdk/errors"
 	"github.com/corpix/gdk/log"
 	"github.com/corpix/gdk/metrics"
 )
@@ -22,6 +27,59 @@ var (
 	MetricsHandler    = promhttp.InstrumentMetricHandler
 	MetricsHandlerFor = promhttp.HandlerFor
 )
+
+//
+
+type MetricsConfig struct {
+	Enable    bool   `yaml:"enable"`
+	Log *bool `yaml:"log"`
+	Path      string `yaml:"path"`
+	TokenType string `yaml:"token-type"`
+	Token     string `yaml:"token"`
+	TokenFile string `yaml:"token-file"`
+}
+
+func (c *MetricsConfig) Default() {
+	if c.Log == nil {
+		v := false
+		c.Log = &v
+	}
+	if c.Path == "" {
+		c.Path = "/metrics"
+	}
+	if c.TokenType == "" {
+		c.TokenType = AuthTokenTypeBearer
+	}
+}
+
+func (c *MetricsConfig) Validate() error {
+	if c.Token != "" && c.TokenFile != "" {
+		return errors.New("either define token or token-file, not both of them")
+	}
+
+	if strings.ToLower(c.TokenType) != AuthTokenTypeBearer {
+		// TODO: more token types + token encoding? not sure we need it now, but in future... maybe
+		return errors.New("at this moment only bearer token type is supported")
+	}
+	return nil
+}
+
+func (c *MetricsConfig) Expand() error {
+	c.TokenType = strings.ToLower(c.TokenType)
+
+	// println("foo")
+	// FIXME: expansion called multiple times? why?
+	if c.TokenFile != "" {
+		tokenBytes, err := ioutil.ReadFile(c.TokenFile)
+		if err != nil {
+			return errors.Wrapf(err, "failed to read token file at %q", c.TokenFile)
+		}
+		c.Token = string(tokenBytes)
+	}
+	return nil
+}
+
+//
 
 func Metrics(h Handler, options ...MetricsOption) Handler {
 	labels := []string{
@@ -74,11 +132,41 @@ func Metrics(h Handler, options ...MetricsOption) Handler {
 	)
 }
 
-func WithMetrics(r metrics.RegisterGatherer, rr *Router, options ...MetricsOption) Option {
+func WithMetricsHandler(r metrics.RegisterGatherer, rr *Router, options ...MetricsOption) Option {
 	return func(h *Http) {
-		rr.NewRoute().
+		if !h.Config.Metrics.Enable {
+			return
+		}
+
+		subr := rr.NewRoute().Subrouter()
+
+		if h.Config.Metrics.Token == "" {
+			// NOTE: TokenFile contents will be loaded into Token field
+			log.Warn().Msg("metrics token is not defined, likely this is not what you want, please define metrics.token or metrics.token-file")
+		} else {
+			subr.Use(func(next Handler) Handler {
+				subjectAuthentication := h.Config.Metrics.TokenType + " " + h.Config.Metrics.Token
+				return HandlerFunc(func(w ResponseWriter, r *Request) {
+					clientAuthentication := r.Header.Get(HeaderAuthentication)
+					if subtle.ConstantTimeCompare(
+						[]byte(subjectAuthentication),
+						[]byte(clientAuthentication),
+					) == 1 {
+						next.ServeHTTP(w, r)
+						return
+					}
+
+					l := RequestLog(r)
+					l.Warn().Msg("authentication failed, token does not match")
+
+					w.WriteHeader(StatusNotFound)
+				})
+			})
+		}
+
+		subr.
 			Methods(MethodGet).
-			Path("/metrics").
+			Path(h.Config.Metrics.Path).
 			Handler(MetricsHandler(r, MetricsHandlerFor(r,
 				MetricsHandlerConfig{ErrorLog: log.Std(log.Default)},
 			)))
