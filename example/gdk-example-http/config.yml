@@ -17,3 +17,5 @@ http:
       # jwt:
       #   algorithm: hs256
       #   key: insecure
+    # validator:
+    #   refresh: 5s

@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"time"
 )
 
 var (
@@ -42,6 +43,13 @@ func Session(c *TokenConfig, s TokenStore, v *TokenValidator) Middleware {
 				if err != nil {
 					l.Warn().Err(err).Msg("failed to validate session, creating new")
 					t = NewToken(c)
+					flush = true
+				}
+
+				if t.Header.ValidAfter.Add(*c.Validator.Refresh).Before(time.Now()) {
+					tc := NewToken(c)
+					tc.Payload = t.Payload
+					t = tc
 					flush = true
 				}
 			}
