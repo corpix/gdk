@@ -9,12 +9,11 @@ http:
 
   session:
     enable: true
-
     container:
-      type: jwt
-
+      ## secretbox is default
+      # type: jwt
       secretbox:
         key: d3add3add3add3add3add3add3add3add3add3add3add3add3add3add3add3ad
-      jwt:
-        algorithm: hs256
-        key: insecure
+      # jwt:
+      #   algorithm: hs256
+      #   key: insecure
