@@ -1,6 +1,8 @@
 package main
 
 import (
+	"time"
+
 	"github.com/corpix/gdk/cli"
 	"github.com/corpix/gdk/config"
 	"github.com/corpix/gdk/http"
@@ -46,10 +48,13 @@ func main() {
 		cli.WithHttpTools(cfg.HttpConfig, http.NewRouter(
 			func(r *http.Router) {
 				r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-					w.Write([]byte("hello"))
-
 					t := http.RequestSessionGet(cfg.Http.Session, r)
-					t.Set("hello", "world")
+					greet, ok := t.Get("greet")
+					if !ok {
+						greet = time.Now().String()
+						t.Set("greet", greet)
+					}
+					w.Write([]byte(greet.(string)))
 				})
 				r.HandleFunc("/panic", func(w http.ResponseWriter, r *http.Request) {
 					panic("hello panic")
