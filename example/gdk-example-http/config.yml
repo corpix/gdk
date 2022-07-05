@@ -2,6 +2,19 @@ http:
   address: localhost:8080
   metrics:
     enable: true
+    token: insecure
   trace:
     skip-paths:
       /metrics: {}
+
+  session:
+    enable: true
+
+    container:
+      type: jwt
+
+      secretbox:
+        key: d3add3add3add3add3add3add3add3add3add3add3add3add3add3add3add3ad
+      jwt:
+        algorithm: hs256
+        key: insecure

@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"net/http"
 
 	"github.com/corpix/gdk/errors"
@@ -16,36 +17,25 @@ type (
 	ResponseWriter = http.ResponseWriter
 	Response       = http.Response
 	ContextKey     uint8
-	Http           struct {
+
+	Config struct {
+		Address string         `yaml:"address"`
+		Metrics *MetricsConfig `yaml:"metrics"`
+		Trace   *TraceConfig   `yaml:"trace"`
+		Session *TokenConfig   `yaml:"session"`
+	}
+	Http struct {
 		Config  *Config
 		Address string
 		Handler Handler
 	}
+
+	BufferedResponseWriter struct {
+		ResponseWriter
+		Code int
+		Body *bytes.Buffer
+	}
 )
-
-type Config struct {
-	Address string         `yaml:"address"`
-	Metrics *MetricsConfig `yaml:"metrics"`
-	Trace   *TraceConfig   `yaml:"trace"`
-}
-
-func (c *Config) Default() {
-	if c.Metrics == nil {
-		c.Metrics = &MetricsConfig{}
-	}
-	if c.Trace == nil {
-		c.Trace = &TraceConfig{}
-	}
-}
-
-func (c *Config) Validate() error {
-	if c.Address == "" {
-		return errors.New("address should not be empty")
-	}
-	return nil
-}
-
-//
 
 const (
 	MethodGet     = http.MethodGet
@@ -57,16 +47,35 @@ const (
 	MethodConnect = http.MethodConnect
 	MethodOptions = http.MethodOptions
 	MethodTrace   = http.MethodTrace
-)
 
-const (
-	HeaderRequestId      = "x-request-id"
-	HeaderAuthentication = "authentication"
-)
+	HeaderRequestId     = "x-request-id"
+	HeaderAuthorization = "authorization"
 
-const (
 	AuthTokenTypeBearer = "bearer"
 )
+
+var (
+	_ ResponseWriter = new(BufferedResponseWriter)
+)
+
+func (c *Config) Default() {
+	if c.Metrics == nil {
+		c.Metrics = &MetricsConfig{}
+	}
+	if c.Trace == nil {
+		c.Trace = &TraceConfig{}
+	}
+	if c.Session == nil {
+		c.Session = &TokenConfig{}
+	}
+}
+
+func (c *Config) Validate() error {
+	if c.Address == "" {
+		return errors.New("address should not be empty")
+	}
+	return nil
+}
 
 //
 
@@ -111,4 +120,22 @@ func New(c *Config, options ...Option) *Http {
 	}
 
 	return h
+}
+
+//
+
+func (w *BufferedResponseWriter) WriteHeader(code int)          { w.Code = code }
+func (w *BufferedResponseWriter) Write(buf []byte) (int, error) { return w.Body.Write(buf) }
+func (w *BufferedResponseWriter) Flush() error {
+	w.ResponseWriter.WriteHeader(w.Code)
+	_, err := w.ResponseWriter.Write(w.Body.Bytes())
+	return err
+}
+
+func NewBufferedResponseWriter(w ResponseWriter) *BufferedResponseWriter {
+	return &BufferedResponseWriter{
+		ResponseWriter: w,
+		Code:           StatusOK,
+		Body:           bytes.NewBuffer(nil),
+	}
 }

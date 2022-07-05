@@ -306,16 +306,36 @@ func WithHttpTools(cfg func() *http.Config, router *http.Router, options ...http
 							address = conf.Address
 						}
 
-						httpOptions := []http.Option{
+						middleware := []http.Middleware{}
+						middleware = append(
+							middleware,
+							http.Trace(conf.Trace),
+							http.Recover(),
+						)
+
+						if conf.Session != nil && conf.Session.Enable {
+							store, err := http.NewTokenStore(
+								conf.Session.Store,
+								http.NewTokenContainer(conf.Session.Container),
+							)
+							if err != nil {
+								return err
+							}
+							middleware = append(
+								middleware,
+								http.Session(
+									conf.Session,
+									store,
+									http.NewTokenValidator(conf.Session.Validator),
+								),
+							)
+						}
+						options := []http.Option{
 							http.WithAddress(address),
-							http.WithHandler(http.Compose(router,
-								http.Trace(conf.Trace),
-								http.Recover(),
-							)),
+							http.WithHandler(http.Compose(router, middleware...)),
 							http.WithMetricsHandler(metrics.Default, router),
 						}
-						httpOptions = append(httpOptions, options...)
-						return http.New(conf, httpOptions...).ListenAndServe()
+						return http.New(conf, options...).ListenAndServe()
 					},
 				},
 			},

@@ -37,6 +37,7 @@ type MetricsConfig struct {
 	TokenType string `yaml:"token-type"`
 	Token     string `yaml:"token"`
 	TokenFile string `yaml:"token-file"`
+	token     string
 }
 
 func (c *MetricsConfig) Default() {
@@ -74,7 +75,9 @@ func (c *MetricsConfig) Expand() error {
 		if err != nil {
 			return errors.Wrapf(err, "failed to read token file at %q", c.TokenFile)
 		}
-		c.Token = string(tokenBytes)
+		c.token = string(tokenBytes)
+	} else {
+		c.token = c.Token
 	}
 	return nil
 }
@@ -109,6 +112,7 @@ func Metrics(h Handler, options ...MetricsOption) Handler {
 		Name: "requests_in_flight",
 		Help: "Number of http requests which are currently running.",
 	})
+
 	metrics.MustRegister(
 		duration,
 		total,
@@ -139,19 +143,19 @@ func WithMetricsHandler(r metrics.RegisterGatherer, rr *Router, options ...Metri
 		}
 
 		subr := rr.NewRoute().Subrouter()
+		token := h.Config.Metrics.token
 
-		if h.Config.Metrics.Token == "" {
-			// NOTE: TokenFile contents will be loaded into Token field
+		if token == "" {
 			log.Warn().
-				Msg("metrics token is not defined, likely this is not what you want, please define metrics.token or metrics.token-file")
+				Msg("metrics token is not defined, (very likely this is not what you want, so) please define metrics.token or metrics.token-file")
 		} else {
 			subr.Use(func(next Handler) Handler {
-				subjectAuthentication := h.Config.Metrics.TokenType + " " + h.Config.Metrics.Token
+				subjectAuthorization := h.Config.Metrics.TokenType + " " + token
 				return HandlerFunc(func(w ResponseWriter, r *Request) {
-					clientAuthentication := r.Header.Get(HeaderAuthentication)
+					clientAuthorization := r.Header.Get(HeaderAuthorization)
 					if subtle.ConstantTimeCompare(
-						[]byte(subjectAuthentication),
-						[]byte(clientAuthentication),
+						[]byte(subjectAuthorization),
+						[]byte(clientAuthorization),
 					) == 1 {
 						next.ServeHTTP(w, r)
 						return

@@ -6,6 +6,7 @@ require (
 	github.com/cockroachdb/errors v1.9.0
 	github.com/corpix/revip v0.0.0-20220623235520-adbcca96fe0c
 	github.com/cristalhq/jwt/v4 v4.0.1
+	github.com/davecgh/go-spew v1.1.1
 	github.com/felixge/httpsnoop v1.0.3
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.0

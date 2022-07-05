@@ -47,6 +47,9 @@ func main() {
 			func(r *http.Router) {
 				r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 					w.Write([]byte("hello"))
+
+					t := http.RequestSessionGet(cfg.Http.Session, r)
+					t.Set("hello", "world")
 				})
 				r.HandleFunc("/panic", func(w http.ResponseWriter, r *http.Request) {
 					panic("hello panic")
