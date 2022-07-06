@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/cockroachdb/errors v1.9.0
-	github.com/corpix/revip v0.0.0-20220706144559-d6d6ba5217f1
+	github.com/corpix/revip v0.0.0-20220706184329-ab13a4417ce1
 	github.com/cristalhq/jwt/v4 v4.0.1
 	github.com/felixge/httpsnoop v1.0.3
 	github.com/google/uuid v1.3.0
@@ -46,4 +46,4 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
-replace gopkg.in/yaml.v2 v2.4.0 => github.com/corpix/yaml v0.0.0-20220706142132-cc85bc9b2427
+replace gopkg.in/yaml.v2 v2.4.0 => github.com/corpix/yaml v0.0.0-20220706182535-91862f77ddd0

@@ -7,11 +7,16 @@ import (
 
 type (
 	SessionConfig struct {
+		Enable       bool `yaml:"enable"`
 		*TokenConfig `yaml:",inline"`
 	}
 )
 
 func (c *SessionConfig) Default() {
+	if !c.Enable {
+		return
+	}
+
 	if c.TokenConfig == nil {
 		c.TokenConfig = &TokenConfig{}
 	}

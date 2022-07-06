@@ -25,7 +25,6 @@ import (
 
 type (
 	TokenConfig struct {
-		Enable    bool                  `yaml:"enable"`
 		Store     *TokenStoreConfig     `yaml:"store"`
 		Container *TokenContainerConfig `yaml:"container"`
 		Validator *TokenValidatorConfig `yaml:"validator"`
@@ -190,9 +189,6 @@ var (
 //
 
 func (c *TokenConfig) Default() {
-	if !c.Enable {
-		return
-	}
 	if c.Store == nil {
 		c.Store = &TokenStoreConfig{}
 	}
