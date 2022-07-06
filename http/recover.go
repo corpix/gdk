@@ -21,7 +21,7 @@ func Recover() Middleware {
 					default:
 						e = errors.New(fmt.Sprint(err))
 					}
-					l.Error().Stack().Err(e).Msg("panic recover")
+					l.Error().Stack().Err(errors.WithStack(e)).Msg("panic recover")
 				}
 			}()
 			h.ServeHTTP(w, r)

@@ -85,7 +85,7 @@ func New(level string, options ...Option) (Logger, error) {
 	}
 
 	log = zerolog.New(w).With().
-		Timestamp().Logger().
+		Timestamp().Stack().Logger().
 		Level(logLevel)
 
 	for _, option := range options {
