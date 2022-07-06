@@ -423,9 +423,6 @@ func RequestTokenSet(r *Request, s *Token) *Request {
 //
 
 func (c *TokenStoreConfig) Default() {
-	if c.Type == "" {
-		c.Type = string(TokenStoreTypeCookie)
-	}
 	if c.Type == string(TokenStoreTypeCookie) && c.Cookie == nil {
 		c.Cookie = &TokenStoreCookieConfig{}
 	}

@@ -5,18 +5,38 @@ import (
 	"time"
 )
 
+type (
+	SessionConfig struct {
+		*TokenConfig `yaml:",inline"`
+	}
+)
+
+func (c *SessionConfig) Default() {
+	if c.TokenConfig == nil {
+		c.TokenConfig = &TokenConfig{}
+	}
+	c.TokenConfig.Default()
+
+	if c.Store == nil {
+		c.Store = &TokenStoreConfig{}
+	}
+	if c.Store.Type == "" {
+		c.Store.Type = string(TokenStoreTypeCookie)
+	}
+}
+
 var (
 	ContextKeySession = new(ContextKey)
 )
 
 //
 
-func RequestSessionGet(c *TokenConfig, r *Request) *Token {
+func RequestSessionGet(c *SessionConfig, r *Request) *Token {
 	ctxSession := r.Context().Value(ContextKeySession)
 	if ctxSession != nil {
 		return ctxSession.(*Token)
 	}
-	return NewToken(c)
+	return NewToken(c.TokenConfig)
 }
 
 func RequestSessionSet(r *Request, s *Token) *Request {
@@ -25,7 +45,7 @@ func RequestSessionSet(r *Request, s *Token) *Request {
 
 //
 
-func Session(c *TokenConfig, s TokenStore, v *TokenValidator) Middleware {
+func Session(c *SessionConfig, s TokenStore, v *TokenValidator) Middleware {
 	return func(h Handler) Handler {
 		return HandlerFunc(func(w ResponseWriter, r *Request) {
 			l := RequestLogGet(r)
@@ -34,7 +54,7 @@ func Session(c *TokenConfig, s TokenStore, v *TokenValidator) Middleware {
 			t, err := s.Load(r)
 			if err != nil {
 				l.Warn().Err(err).Msg("failed to load session, creating new")
-				t = NewToken(c)
+				t = NewToken(c.TokenConfig)
 				flush = true
 			}
 
@@ -42,12 +62,12 @@ func Session(c *TokenConfig, s TokenStore, v *TokenValidator) Middleware {
 				err = v.Validate(t)
 				if err != nil {
 					l.Warn().Err(err).Msg("failed to validate session, creating new")
-					t = NewToken(c)
+					t = NewToken(c.TokenConfig)
 					flush = true
 				}
 
 				if t.Header.ValidAfter.Add(*c.Validator.Refresh).Before(time.Now()) {
-					tc := NewToken(c)
+					tc := NewToken(c.TokenConfig)
 					tc.Payload = t.Payload
 					t = tc
 					flush = true

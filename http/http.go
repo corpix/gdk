@@ -22,7 +22,7 @@ type (
 		Address string         `yaml:"address"`
 		Metrics *MetricsConfig `yaml:"metrics"`
 		Trace   *TraceConfig   `yaml:"trace"`
-		Session *TokenConfig   `yaml:"session"`
+		Session *SessionConfig   `yaml:"session"`
 	}
 	Http struct {
 		Config  *Config
@@ -66,7 +66,7 @@ func (c *Config) Default() {
 		c.Trace = &TraceConfig{}
 	}
 	if c.Session == nil {
-		c.Session = &TokenConfig{}
+		c.Session = &SessionConfig{TokenConfig: &TokenConfig{}}
 	}
 }
 
