@@ -19,7 +19,7 @@ func RequestSessionGet(c *TokenConfig, r *Request) *Token {
 	return NewToken(c)
 }
 
-func RequestSessonSet(r *Request, s *Token) *Request {
+func RequestSessionSet(r *Request, s *Token) *Request {
 	return r.WithContext(context.WithValue(r.Context(), ContextKeySession, s))
 }
 
@@ -56,7 +56,7 @@ func Session(c *TokenConfig, s TokenStore, v *TokenValidator) Middleware {
 
 			//
 
-			r = RequestSessonSet(r, t)
+			r = RequestSessionSet(r, t)
 			bw := NewBufferedResponseWriter(w)
 			defer bw.Flush()
 
