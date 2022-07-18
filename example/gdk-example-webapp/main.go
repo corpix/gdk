@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-	"os"
 	"time"
 
 	"github.com/corpix/gdk/cli"
@@ -49,9 +47,9 @@ var (
 //
 
 func main() {
-	err := cli.New(
-		cli.WithName("gdk-example-app"),
-		cli.WithUsage("GDK example application"),
+	cli.New(
+		cli.WithName("gdk-example-webapp"),
+		cli.WithUsage("GDK example web application"),
 		cli.WithDescription("Example application showing features of GDK"),
 		cli.WithConfigTools(
 			conf,
@@ -63,7 +61,7 @@ func main() {
 			conf.HttpConfig,
 			http.WithInvoke(
 				di.Default,
-				func(h *http.Http, g *http.CsrfGenerator, t *template.Template) {
+				func(h *http.Http, t *template.Template) {
 					h.Router.
 						HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 							w.Header().Add(http.HeaderContentType, http.MimeTextHtml)
@@ -92,11 +90,5 @@ func main() {
 				},
 			),
 		),
-	).Run(os.Args)
-	if err != nil {
-		// FIXME: wtf, why no log output for error at this stage?
-		fmt.Printf("%+v\n", err)
-		log.Err(err).Msg("failed to run")
-		os.Exit(1)
-	}
+	).RunAndExitOnError()
 }
