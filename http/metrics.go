@@ -32,7 +32,6 @@ var (
 
 type MetricsConfig struct {
 	Enable    bool   `yaml:"enable"`
-	Log       *bool  `yaml:"log"`
 	Path      string `yaml:"path"`
 	AuthType  string `yaml:"auth-type"`
 	Token     string `yaml:"token"`
@@ -43,10 +42,6 @@ type MetricsConfig struct {
 }
 
 func (c *MetricsConfig) Default() {
-	if c.Log == nil {
-		v := false
-		c.Log = &v
-	}
 	if c.Path == "" {
 		c.Path = "/metrics"
 	}

@@ -146,9 +146,7 @@ func WithProvide(cont *di.Container) Option {
 }
 
 func WithInvoke(cont *di.Container, f di.Function) Option {
-	return func(c *Cli) {
-		di.MustInvoke(cont, f)
-	}
+	return func(c *Cli) { di.MustInvoke(cont, f) }
 }
 
 //

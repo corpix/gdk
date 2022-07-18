@@ -45,9 +45,7 @@ func WithProvide(cont *di.Container) Option {
 }
 
 func WithInvoke(cont *di.Container, f di.Function) Option {
-	return func(t *Template) {
-		di.MustInvoke(cont, f)
-	}
+	return func(t *Template) { di.MustInvoke(cont, f) }
 }
 
 func Parse(name string, data string) (*Template, error) {

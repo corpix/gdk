@@ -54,9 +54,7 @@ func WithProvide(cont *di.Container) Option {
 }
 
 func WithInvoke(cont *di.Container, f di.Function) Option {
-	return func(l *Logger) {
-		di.MustInvoke(cont, f)
-	}
+	return func(l *Logger) { di.MustInvoke(cont, f) }
 }
 
 //

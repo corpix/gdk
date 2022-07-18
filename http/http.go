@@ -118,9 +118,7 @@ func WithProvide(cont *di.Container) Option {
 }
 
 func WithInvoke(cont *di.Container, f di.Function) Option {
-	return func(h *Http) {
-		di.MustInvoke(cont, f)
-	}
+	return func(h *Http) { di.MustInvoke(cont, f) }
 }
 
 func WithMiddleware(middlewares ...Middleware) Option {
