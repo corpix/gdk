@@ -6,6 +6,7 @@ import (
 	"github.com/corpix/gdk/di"
 	"github.com/corpix/gdk/errors"
 	"github.com/corpix/gdk/log"
+	"path/filepath"
 )
 
 type (
@@ -19,12 +20,13 @@ type (
 	ContextKey     uint8
 
 	Config struct {
-		Address          string                  `yaml:"address,omitempty"`
-		BufferedResponse *BufferedResponseConfig `yaml:"buffered-response,omitempty"`
-		Metrics          *MetricsConfig          `yaml:"metrics,omitempty"`
-		Trace            *TraceConfig            `yaml:"trace,omitempty"`
-		Session          *SessionConfig          `yaml:"session,omitempty"`
-		Csrf             *CsrfConfig             `yaml:"csrf,omitempty"`
+		Address          string                  `yaml:"address"`
+		Prefix           string                  `yaml:"prefix"`
+		BufferedResponse *BufferedResponseConfig `yaml:"buffered-response"`
+		Metrics          *MetricsConfig          `yaml:"metrics"`
+		Trace            *TraceConfig            `yaml:"trace"`
+		Session          *SessionConfig          `yaml:"session"`
+		Csrf             *CsrfConfig             `yaml:"csrf"`
 	}
 	Http struct {
 		Config  *Config
@@ -71,25 +73,26 @@ func (c *Config) Default() {
 
 	if c.Metrics.Enable {
 		c.Metrics.Default()
+		metricsPath := filepath.Join(c.Prefix, c.Metrics.Path)
 
 		c.BufferedResponse.Default()
 		c.BufferedResponse.SkipConfig.Default()
-		c.BufferedResponse.SkipPaths[c.Metrics.Path] = struct{}{}
+		c.BufferedResponse.SkipPaths[metricsPath] = struct{}{}
 
 		c.Trace.Default()
 		c.Trace.SkipConfig.Default()
-		c.Trace.SkipPaths[c.Metrics.Path] = struct{}{}
+		c.Trace.SkipPaths[metricsPath] = struct{}{}
 
 		c.Session.Default()
 		if c.Session.Enable {
 			c.Session.SkipConfig.Default()
-			c.Session.SkipPaths[c.Metrics.Path] = struct{}{}
+			c.Session.SkipPaths[metricsPath] = struct{}{}
 		}
 
 		c.Csrf.Default()
 		if c.Csrf.Enable {
 			c.Csrf.SkipConfig.Default()
-			c.Csrf.SkipPaths[c.Metrics.Path] = struct{}{}
+			c.Csrf.SkipPaths[metricsPath] = struct{}{}
 		}
 	}
 }
@@ -109,6 +112,36 @@ func WithAddress(addr string) Option {
 
 func WithRouter(r *Router) Option {
 	return func(h *Http) { h.Router = r }
+}
+
+func WithLogAvailableRoutes() Option {
+	return func(h *Http) {
+		err := h.Router.Walk(func(route *Route, router *Router, ancestors []*Route) error {
+			methods, err := route.GetMethods()
+			if err != nil {
+				return err
+			}
+			query, err := route.GetQueriesTemplates()
+			if err != nil {
+				return err
+			}
+			path, err := route.GetPathTemplate()
+			if err != nil {
+				return err
+			}
+
+			log.Info().
+				Str("path", path).
+				Strs("query", query).
+				Strs("methods", methods).
+				Msg("route")
+
+			return nil
+		})
+		if err != nil {
+			panic(err)
+		}
+	}
 }
 
 func WithProvide(cont *di.Container) Option {

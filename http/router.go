@@ -6,6 +6,7 @@ import (
 
 type (
 	Router         = mux.Router
+	RouteWalkFn    = mux.WalkFunc
 	Route          = mux.Route
 	RouteMatch     = mux.RouteMatch
 	MiddlewareFunc = mux.MiddlewareFunc
@@ -17,6 +18,10 @@ var (
 	CurrentRoute = mux.CurrentRoute
 )
 
-func NewRouter() *Router {
-	return mux.NewRouter()
+func NewRouter(c *Config) *Router {
+	r := mux.NewRouter()
+	if c.Prefix != "" {
+		r = r.PathPrefix(c.Prefix).Subrouter()
+	}
+	return r
 }

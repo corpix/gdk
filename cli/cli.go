@@ -320,7 +320,7 @@ func WithHttpTools(cfg func() *http.Config, extraOptions ...http.Option) Option 
 
 						//
 
-						router := http.NewRouter()
+						router := http.NewRouter(conf)
 						di.MustProvide(di.Default, func() *http.Router {
 							return router
 						})
@@ -395,6 +395,7 @@ func WithHttpTools(cfg func() *http.Config, extraOptions ...http.Option) Option 
 							http.WithMiddleware(middleware...),
 						)
 						options = append(options, extraOptions...)
+						options = append(options, http.WithLogAvailableRoutes())
 
 						return http.New(conf, options...).ListenAndServe()
 					},
