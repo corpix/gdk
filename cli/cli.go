@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/corpix/gdk/config"
+	"github.com/corpix/gdk/di"
 	"github.com/corpix/gdk/http"
 	"github.com/corpix/gdk/log"
 	"github.com/corpix/gdk/metrics"
@@ -138,11 +139,23 @@ func WithAction(fn ActionFunc) Option {
 	}
 }
 
+func WithProvide(cont *di.Container) Option {
+	return func(c *Cli) {
+		di.MustProvide(cont, func() *Cli { return c })
+	}
+}
+
+func WithInvoke(cont *di.Container, f di.Function) Option {
+	return func(c *Cli) {
+		di.MustInvoke(cont, f)
+	}
+}
+
 //
 
 func ConfigFromContext(ctx *Context, cfg Config, unmarshaler config.Unmarshaler) error {
 	paths := ctx.StringSlice("config")
-	sources := make([]config.Option, len(paths))
+	sources := make([]config.SourceOption, len(paths))
 
 	for n, path := range paths {
 		sources[n] = config.FromFile(path, unmarshaler)
@@ -259,7 +272,7 @@ func WithConfigTools(cfg Config, unmarshaler config.Unmarshaler, marshaler confi
 	)
 }
 
-func WithLogTools(cfg func() *log.Config, options ...log.Option) Option {
+func WithLogTools(cfg func() *log.Config, extraOptions ...log.Option) Option {
 	return WithComposition(
 		WithFlags(Flags{
 			&StringFlag{
@@ -268,6 +281,7 @@ func WithLogTools(cfg func() *log.Config, options ...log.Option) Option {
 				Usage:   "logging level (debug, info, warn, error)",
 			},
 		}),
+		WithProvide(di.Default),
 		func(c *Cli) {
 			WithBefore(func(ctx *Context) error {
 				level := ctx.String("log-level")
@@ -275,13 +289,13 @@ func WithLogTools(cfg func() *log.Config, options ...log.Option) Option {
 					level = cfg().Level
 				}
 
-				return log.Init(level, options...)
+				return log.Init(level, extraOptions...)
 			})(c)
 		},
 	)
 }
 
-func WithHttpTools(cfg func() *http.Config, router *http.Router, options ...http.Option) Option {
+func WithHttpTools(cfg func() *http.Config, extraOptions ...http.Option) Option {
 	return func(c *Cli) {
 		c.Commands = append(c.Commands, &Command{
 			Name:    "http",
@@ -306,35 +320,84 @@ func WithHttpTools(cfg func() *http.Config, router *http.Router, options ...http
 							address = conf.Address
 						}
 
+						//
+
+						router := http.NewRouter()
+						di.MustProvide(di.Default, func() *http.Router {
+							return router
+						})
+
+						//
+
 						middleware := []http.Middleware{}
+						options := []http.Option{
+							http.WithRouter(router),
+						}
+
+						// NOTE: buffered response middleware should be first middleware
+						// it is required when you use middleare like Session
+						switch {
+						case conf.Session == nil || !conf.Session.Enable:
+						default:
+							middleware = append(middleware, http.MiddlewareBufferedResponse(conf.BufferedResponse))
+						}
 						middleware = append(
 							middleware,
-							http.Trace(conf.Trace),
-							http.Recover(),
+							http.MiddlewareTrace(conf.Trace),
+							http.MiddlewareRecover(),
 						)
+
+						//
+
+						if conf.Metrics.Enable {
+							middleware = append(middleware, http.MiddlewareMetrics(conf.Metrics))
+							options = append(options, http.WithMetricsHandler(metrics.Default))
+						}
 
 						if conf.Session != nil && conf.Session.Enable {
 							store, err := http.NewTokenStore(
 								conf.Session.Store,
 								http.NewTokenContainer(conf.Session.Container),
+								http.NewTokenEncodeDecoder(conf.Session.Encoder),
 							)
 							if err != nil {
 								return err
 							}
 							middleware = append(
 								middleware,
-								http.Session(
+								http.MiddlewareSession(
 									conf.Session,
 									store,
 									http.NewTokenValidator(conf.Session.Validator),
 								),
 							)
 						}
-						options := []http.Option{
-							http.WithAddress(address),
-							http.WithHandler(http.Compose(router, middleware...)),
-							http.WithMetricsHandler(metrics.Default, router),
+
+						if conf.Csrf != nil && conf.Csrf.Enable {
+							csrfCont := http.NewTokenContainer(conf.Csrf.Container)
+							csrfEnc := http.NewTokenEncodeDecoder(conf.Csrf.Encoder)
+							middleware = append(
+								middleware,
+								http.MiddlewareCsrf(
+									conf.Csrf, csrfCont, csrfEnc,
+									http.NewTokenValidator(conf.Csrf.Validator),
+								),
+							)
+							di.MustProvide(di.Default, func() *http.CsrfGenerator {
+								return http.NewCsrfGenerator(conf.Csrf, csrfCont, csrfEnc)
+							})
 						}
+
+						//
+
+						options = append(
+							options,
+							http.WithProvide(di.Default),
+							http.WithAddress(address),
+							http.WithMiddleware(middleware...),
+						)
+						options = append(options, extraOptions...)
+
 						return http.New(conf, options...).ListenAndServe()
 					},
 				},

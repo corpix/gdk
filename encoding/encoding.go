@@ -28,13 +28,13 @@ func (e *EncodeDecoderBase64) Encode(buf []byte) ([]byte, error) {
 
 func (e *EncodeDecoderBase64) Decode(buf []byte) ([]byte, error) {
 	dst := make([]byte, e.Encoding.DecodedLen(len(buf)))
-	_, err := e.Encoding.Decode(dst, buf)
+	n, err := e.Encoding.Decode(dst, buf)
 	if err != nil {
 		return nil, err
 	}
-	return dst, nil
+	return dst[:n], nil
 }
 
 func NewEncodeDecoderBase64() *EncodeDecoderBase64 {
-	return &EncodeDecoderBase64{Encoding: base64.RawStdEncoding}
+	return &EncodeDecoderBase64{Encoding: base64.StdEncoding}
 }

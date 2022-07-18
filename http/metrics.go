@@ -34,10 +34,12 @@ type MetricsConfig struct {
 	Enable    bool   `yaml:"enable"`
 	Log       *bool  `yaml:"log"`
 	Path      string `yaml:"path"`
-	TokenType string `yaml:"token-type"`
+	AuthType  string `yaml:"auth-type"`
 	Token     string `yaml:"token"`
 	TokenFile string `yaml:"token-file"`
 	token     string
+
+	*SkipConfig `yaml:",inline,omitempty"`
 }
 
 func (c *MetricsConfig) Default() {
@@ -48,8 +50,12 @@ func (c *MetricsConfig) Default() {
 	if c.Path == "" {
 		c.Path = "/metrics"
 	}
-	if c.TokenType == "" {
-		c.TokenType = AuthTokenTypeBearer
+	if c.AuthType == "" {
+		c.AuthType = AuthTokenTypeBearer
+	}
+
+	if c.SkipConfig == nil {
+		c.SkipConfig = &SkipConfig{}
 	}
 }
 
@@ -58,7 +64,7 @@ func (c *MetricsConfig) Validate() error {
 		return errors.New("either define token or token-file, not both of them")
 	}
 
-	if strings.ToLower(c.TokenType) != AuthTokenTypeBearer {
+	if strings.ToLower(c.AuthType) != AuthTokenTypeBearer {
 		// TODO: more token types + token encoding? not sure we need it now, but in future... maybe
 		return errors.New("at this moment only bearer token type is supported")
 	}
@@ -66,9 +72,8 @@ func (c *MetricsConfig) Validate() error {
 }
 
 func (c *MetricsConfig) Expand() error {
-	c.TokenType = strings.ToLower(c.TokenType)
+	c.AuthType = strings.ToLower(c.AuthType)
 
-	// println("foo")
 	// FIXME: expansion called multiple times? why?
 	if c.TokenFile != "" {
 		tokenBytes, err := ioutil.ReadFile(c.TokenFile)
@@ -84,7 +89,7 @@ func (c *MetricsConfig) Expand() error {
 
 //
 
-func Metrics(h Handler, options ...MetricsOption) Handler {
+func MiddlewareMetrics(c *MetricsConfig, options ...MetricsOption) Middleware {
 	labels := []string{
 		"code",
 		"method",
@@ -121,61 +126,72 @@ func Metrics(h Handler, options ...MetricsOption) Handler {
 		inFlight,
 	)
 
-	return MetricsHandlerDuration(duration,
-		MetricsHandlerCounter(total,
-			MetricsHandlerRequestSize(reqSize,
-				MetricsHandlerResponseSize(resSize,
-					MetricsHandlerInFlight(inFlight, h),
+	return func(h Handler) Handler {
+		next := MetricsHandlerDuration(duration,
+			MetricsHandlerCounter(total,
+				MetricsHandlerRequestSize(reqSize,
+					MetricsHandlerResponseSize(resSize,
+						MetricsHandlerInFlight(inFlight, h),
+						options...,
+					),
 					options...,
 				),
 				options...,
 			),
 			options...,
-		),
-		options...,
-	)
+		)
+
+		return HandlerFunc(func(w ResponseWriter, r *Request) {
+			if Skip(c.SkipConfig, r) {
+				h.ServeHTTP(w, r)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
-func WithMetricsHandler(r metrics.RegisterGatherer, rr *Router, options ...MetricsOption) Option {
+func WithMetricsHandler(registry metrics.RegisterGatherer) Option {
 	return func(h *Http) {
 		if !h.Config.Metrics.Enable {
 			return
 		}
 
-		subr := rr.NewRoute().Subrouter()
-		token := h.Config.Metrics.token
+		var (
+			handler    Handler
+			rawHandler = MetricsHandler(registry, MetricsHandlerFor(registry,
+				MetricsHandlerConfig{ErrorLog: log.Std(log.Default)},
+			))
+			r = h.Router.NewRoute().
+				Methods(MethodGet).
+				Path(h.Config.Metrics.Path)
+			token = h.Config.Metrics.token
+		)
 
 		if token == "" {
 			log.Warn().
 				Msg("metrics token is not defined, (very likely this is not what you want, so) please define metrics.token or metrics.token-file")
+
+			handler = rawHandler
 		} else {
-			subr.Use(func(next Handler) Handler {
-				subjectAuthorization := h.Config.Metrics.TokenType + " " + token
-				return HandlerFunc(func(w ResponseWriter, r *Request) {
-					clientAuthorization := r.Header.Get(HeaderAuthorization)
-					if subtle.ConstantTimeCompare(
-						[]byte(subjectAuthorization),
-						[]byte(clientAuthorization),
-					) == 1 {
-						next.ServeHTTP(w, r)
-						return
-					}
+			subjectAuthorization := h.Config.Metrics.AuthType + " " + token
+			handler = HandlerFunc(func(w ResponseWriter, r *Request) {
+				clientAuthorization := r.Header.Get(HeaderAuthorization)
+				if subtle.ConstantTimeCompare(
+					[]byte(subjectAuthorization),
+					[]byte(clientAuthorization),
+				) == 1 {
+					rawHandler.ServeHTTP(w, r)
+					return
+				}
 
-					l := RequestLogGet(r)
-					l.Warn().Msg("authentication failed, token does not match")
+				l := RequestLogGet(r)
+				l.Warn().Msg("authentication failed, token does not match")
 
-					w.WriteHeader(StatusNotFound)
-				})
+				w.WriteHeader(StatusNotFound)
 			})
 		}
 
-		subr.
-			Methods(MethodGet).
-			Path(h.Config.Metrics.Path).
-			Handler(MetricsHandler(r, MetricsHandlerFor(r,
-				MetricsHandlerConfig{ErrorLog: log.Std(log.Default)},
-			)))
-
-		h.Handler = Metrics(h.Handler, options...)
+		r.Handler(handler)
 	}
 }

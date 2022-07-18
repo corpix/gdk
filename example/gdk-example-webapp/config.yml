@@ -15,3 +15,8 @@ http:
       #   key: insecure
     # validator:
     #   refresh: 5s
+  csrf:
+    enable: true
+    container:
+      secretbox:
+        key: d3add3add3add3add3add3add3add3add3add3add3add3add3add3add3add3ad

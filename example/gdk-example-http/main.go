@@ -30,7 +30,7 @@ func (c *Config) Validate() error {
 func (c *Config) LogConfig() *log.Config   { return c.Log }
 func (c *Config) HttpConfig() *http.Config { return c.Http }
 
-var cfg = &Config{}
+var conf = &Config{}
 
 //
 
@@ -40,15 +40,15 @@ func main() {
 		cli.WithUsage("GDK example application"),
 		cli.WithDescription("Example application showing features of GDK"),
 		cli.WithConfigTools(
-			cfg,
+			conf,
 			config.YamlUnmarshaler,
 			config.YamlMarshaler,
 		),
-		cli.WithLogTools(cfg.LogConfig),
-		cli.WithHttpTools(cfg.HttpConfig, http.NewRouter(
+		cli.WithLogTools(conf.LogConfig),
+		cli.WithHttpTools(conf.HttpConfig, http.NewRouter(
 			func(r *http.Router) {
 				r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-					t := http.RequestSessionGet(cfg.Http.Session, r)
+					t := http.RequestSessionGet(conf.Http.Session, r)
 					greet, ok := t.Get("greet")
 					if !ok {
 						greet = time.Now().String()

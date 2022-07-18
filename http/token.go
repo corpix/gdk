@@ -25,12 +25,13 @@ import (
 
 type (
 	TokenConfig struct {
-		Store     *TokenStoreConfig     `yaml:"store"`
+		Store     *TokenStoreConfig     `yaml:"store,omitempty"`
 		Container *TokenContainerConfig `yaml:"container"`
+		Encoder   string                `yaml:"encoder"`
 		Validator *TokenValidatorConfig `yaml:"validator"`
 	}
 	Token struct {
-		nonce   uint
+		nonce   uint64
 		Header  TokenHeader  `json:"header"`
 		Payload TokenPayload `json:"payload"`
 	}
@@ -39,6 +40,10 @@ type (
 		ValidBefore time.Time `json:"valid-before"`
 	}
 	TokenPayload map[string]interface{}
+	TokenKV      interface {
+		Get(key string) (interface{}, bool)
+		Set(key string, value interface{})
+	}
 
 	TokenJwt struct {
 		jwt.RegisteredClaims
@@ -61,39 +66,37 @@ type (
 		Name     string         `yaml:"name"`
 		Path     string         `yaml:"path"`
 		Domain   string         `yaml:"domain"`
-		MaxAge   *time.Duration `yaml:"max-age"`
-		Secure   *bool          `yaml:"secure"`
-		HttpOnly *bool          `yaml:"httponly"`
+		MaxAge   *time.Duration `yaml:"max-age,omitempty"`
+		Secure   *bool          `yaml:"secure,omitempty"`
+		HttpOnly *bool          `yaml:"httponly,omitempty"`
 		SameSite string         `yaml:"same-site"`
-		Value    string         `yaml:"value"`
 	}
 	TokenStoreCookie struct {
 		Config        *TokenStoreCookieConfig
-		EncodeDecoder encoding.EncodeDecoder
 		Container     TokenContainer
+		EncodeDecoder TokenEncodeDecoder
 	}
-	TokenStoreCookieValue string
 
 	TokenContainerConfig struct {
 		Type      string                         `yaml:"type"`
-		Json      *TokenContainerJsonConfig      `yaml:"json"`
-		Jwt       *TokenContainerJwtConfig       `yaml:"jwt"`
-		Msgpack   *TokenContainerMsgpackConfig   `yaml:"msgpack"`
-		SecretBox *TokenContainerSecretBoxConfig `yaml:"secretbox"`
+		Json      *TokenContainerJsonConfig      `yaml:"json,omitempty"`
+		Jwt       *TokenContainerJwtConfig       `yaml:"jwt,omitempty"`
+		Msgpack   *TokenContainerMsgpackConfig   `yaml:"msgpack,omitempty"`
+		SecretBox *TokenContainerSecretBoxConfig `yaml:"secretbox,omitempty"`
 	}
 	TokenContainerType       string
 	TokenContainerJsonConfig struct{}
 	TokenContainerJwtConfig  struct {
 		Algorithm string `yaml:"algorithm"`
 
-		Key     string `yaml:"key"`
-		KeyFile string `yaml:"key-file"`
+		Key     string `yaml:"key,omitempty"`
+		KeyFile string `yaml:"key-file,omitempty"`
 		key     []byte
 	}
 	TokenContainerMsgpackConfig   struct{}
 	TokenContainerSecretBoxConfig struct {
-		Key       string `yaml:"key"`
-		KeyFile   string `yaml:"key-file"`
+		Key       string `yaml:"key,omitempty"`
+		KeyFile   string `yaml:"key-file,omitempty"`
 		key       crypto.SecretBoxKey
 		Container *TokenContainerConfig `yaml:"container"`
 	}
@@ -119,10 +122,12 @@ type (
 		SecretBox *crypto.SecretBox
 	}
 
+	TokenEncodeDecoderType string
+	TokenEncodeDecoder     encoding.EncodeDecoder
+
 	TokenValidatorConfig struct {
 		Enable    *bool          `yaml:"enable"`
 		MaxAge    *time.Duration `yaml:"max-age"`
-		Refresh   *time.Duration `yaml:"refresh"`
 		TimeDrift *time.Duration `yaml:"time-drift"`
 	}
 	TokenValidator struct {
@@ -131,9 +136,10 @@ type (
 )
 
 const (
-	TokenStoreTypeCookie        TokenStoreType        = "cookie"
-	TokenStoreCookieValueRaw    TokenStoreCookieValue = "raw"
-	TokenStoreCookieValueBase64 TokenStoreCookieValue = "base64"
+	TokenStoreTypeCookie TokenStoreType = "cookie"
+
+	TokenEncodeDecoderTypeRaw    TokenEncodeDecoderType = "raw"
+	TokenEncodeDecoderTypeBase64 TokenEncodeDecoderType = "base64"
 
 	TokenContainerTypeJson      TokenContainerType = "json"
 	TokenContainerTypeJwt       TokenContainerType = "jwt"
@@ -189,15 +195,26 @@ var (
 //
 
 func (c *TokenConfig) Default() {
-	if c.Store == nil {
-		c.Store = &TokenStoreConfig{}
-	}
 	if c.Container == nil {
 		c.Container = &TokenContainerConfig{}
+	}
+	if c.Encoder == "" {
+		c.Encoder = string(TokenEncodeDecoderTypeRaw)
 	}
 	if c.Validator == nil {
 		c.Validator = &TokenValidatorConfig{}
 	}
+}
+
+func (c *TokenConfig) Validate() error {
+	switch TokenEncodeDecoderType(strings.ToLower(c.Encoder)) {
+	case
+		TokenEncodeDecoderTypeRaw,
+		TokenEncodeDecoderTypeBase64:
+	default:
+		return errors.Errorf("unsupported encode decoder %q", c.Encoder)
+	}
+	return nil
 }
 
 //
@@ -245,10 +262,6 @@ func (c *TokenValidatorConfig) Default() {
 		dur := 24 * time.Hour
 		c.MaxAge = &dur
 	}
-	if c.Refresh == nil {
-		dur := *c.MaxAge / 2
-		c.Refresh = &dur
-	}
 	if c.TimeDrift == nil {
 		dur := 30 * time.Second
 		c.TimeDrift = &dur
@@ -258,9 +271,6 @@ func (c *TokenValidatorConfig) Default() {
 func (c *TokenValidatorConfig) Validate() error {
 	if *c.MaxAge <= 0 {
 		return errors.New("max-age should be larger than zero")
-	}
-	if *c.Refresh <= 0 {
-		return errors.New("refresh should be larger than zero")
 	}
 	if *c.TimeDrift < 0 {
 		return errors.New("time-drift should be positive")
@@ -334,7 +344,7 @@ func (c *TokenContainerJwtConfig) Expand() error {
 
 //
 
-func (c *TokenContainerSecretBoxConfig) Default()  {
+func (c *TokenContainerSecretBoxConfig) Default() {
 	if c.Container == nil {
 		c.Container = &TokenContainerConfig{}
 	}
@@ -377,7 +387,7 @@ func (c *TokenContainerSecretBoxConfig) Expand() error {
 
 //
 
-func (s *Token) Nonce() uint { return s.nonce }
+func (s *Token) Nonce() uint64 { return s.nonce }
 
 func (s *Token) Get(key string) (interface{}, bool) {
 	v, ok := s.Payload[key]
@@ -445,9 +455,6 @@ func (c *TokenStoreCookieConfig) Default() {
 	if c.SameSite == "" {
 		c.SameSite = CookieSameSiteModesString[CookieSameSiteDefaultMode]
 	}
-	if c.Value == "" {
-		c.Value = string(TokenStoreCookieValueRaw)
-	}
 }
 
 func (c *TokenStoreCookieConfig) Validate() error {
@@ -464,14 +471,6 @@ func (c *TokenStoreCookieConfig) Validate() error {
 			"unexpected same-site value %q, expected one of: %q",
 			c.SameSite, available,
 		)
-	}
-
-	switch TokenStoreCookieValue(strings.ToLower(c.Value)) {
-	case
-		TokenStoreCookieValueRaw,
-		TokenStoreCookieValueBase64:
-	default:
-		return errors.Errorf("unsupported cookie value format %q", c.Value)
 	}
 
 	return nil
@@ -543,27 +542,20 @@ func (s *TokenStoreCookie) Drop(w ResponseWriter) error {
 	return nil
 }
 
-func NewTokenStoreCookie(c *TokenStoreCookieConfig, cont TokenContainer) *TokenStoreCookie {
-	var e encoding.EncodeDecoder
-	switch TokenStoreCookieValue(strings.ToLower(c.Value)) {
-	case TokenStoreCookieValueRaw:
-	case TokenStoreCookieValueBase64:
-		e = encoding.NewEncodeDecoderBase64()
-	default:
-		panic(errors.Errorf)
-	}
-
+func NewTokenStoreCookie(c *TokenStoreCookieConfig, cont TokenContainer, enc TokenEncodeDecoder) *TokenStoreCookie {
 	return &TokenStoreCookie{
 		Config:        c,
-		EncodeDecoder: e,
 		Container:     cont,
+		EncodeDecoder: enc,
 	}
 }
 
-func NewTokenStore(c *TokenStoreConfig, cont TokenContainer) (TokenStore, error) {
+//
+
+func NewTokenStore(c *TokenStoreConfig, cont TokenContainer, enc TokenEncodeDecoder) (TokenStore, error) {
 	switch strings.ToLower(c.Type) {
 	case string(TokenStoreTypeCookie):
-		return NewTokenStoreCookie(c.Cookie, cont), nil
+		return NewTokenStoreCookie(c.Cookie, cont, enc), nil
 	default:
 		return nil, errors.Errorf("unsupported store type: %q", c.Type)
 	}
@@ -793,4 +785,18 @@ func NewTokenContainer(c *TokenContainerConfig) TokenContainer {
 	default:
 		panic(errors.Errorf("unsupported token container type: %q", c.Type))
 	}
+}
+
+//
+
+func NewTokenEncodeDecoder(t string) TokenEncodeDecoder {
+	var e encoding.EncodeDecoder
+	switch TokenEncodeDecoderType(strings.ToLower(t)) {
+	case TokenEncodeDecoderTypeRaw:
+	case TokenEncodeDecoderTypeBase64:
+		e = encoding.NewEncodeDecoderBase64()
+	default:
+		panic(errors.Errorf("unsupported encode decoder type %q", t))
+	}
+	return e
 }

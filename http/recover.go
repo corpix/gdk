@@ -6,7 +6,7 @@ import (
 	"github.com/corpix/gdk/errors"
 )
 
-func Recover() Middleware {
+func MiddlewareRecover() Middleware {
 	return func(h Handler) Handler {
 		return HandlerFunc(func(w ResponseWriter, r *Request) {
 			defer func() {

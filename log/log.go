@@ -8,6 +8,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/pkgerrors"
 
+	"github.com/corpix/gdk/di"
 	"github.com/corpix/gdk/errors"
 )
 
@@ -45,6 +46,18 @@ func UpdateContext(update func(c Context) Context) { Default.UpdateContext(updat
 func Warn() *Event                                 { return Default.Warn() }
 func WithLevel(level Level) *Event                 { return Default.WithLevel(level) }
 func With() Context                                { return Default.With() }
+
+func WithProvide(cont *di.Container) Option {
+	return func(l *Logger) {
+		di.MustProvide(cont, func() *Logger { return l })
+	}
+}
+
+func WithInvoke(cont *di.Container, f di.Function) Option {
+	return func(l *Logger) {
+		di.MustInvoke(cont, f)
+	}
+}
 
 //
 

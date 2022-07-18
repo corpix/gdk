@@ -6,7 +6,6 @@ import (
 
 type (
 	Router         = mux.Router
-	RouterOption   func(*Router)
 	Route          = mux.Route
 	RouteMatch     = mux.RouteMatch
 	MiddlewareFunc = mux.MiddlewareFunc
@@ -18,10 +17,6 @@ var (
 	CurrentRoute = mux.CurrentRoute
 )
 
-func NewRouter(options ...RouterOption) *Router {
-	r := mux.NewRouter()
-	for _, option := range options {
-		option(r)
-	}
-	return r
+func NewRouter() *Router {
+	return mux.NewRouter()
 }

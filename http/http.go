@@ -1,9 +1,9 @@
 package http
 
 import (
-	"bytes"
 	"net/http"
 
+	"github.com/corpix/gdk/di"
 	"github.com/corpix/gdk/errors"
 	"github.com/corpix/gdk/log"
 )
@@ -19,21 +19,17 @@ type (
 	ContextKey     uint8
 
 	Config struct {
-		Address string         `yaml:"address"`
-		Metrics *MetricsConfig `yaml:"metrics"`
-		Trace   *TraceConfig   `yaml:"trace"`
-		Session *SessionConfig   `yaml:"session"`
+		Address          string                  `yaml:"address,omitempty"`
+		BufferedResponse *BufferedResponseConfig `yaml:"buffered-response,omitempty"`
+		Metrics          *MetricsConfig          `yaml:"metrics,omitempty"`
+		Trace            *TraceConfig            `yaml:"trace,omitempty"`
+		Session          *SessionConfig          `yaml:"session,omitempty"`
+		Csrf             *CsrfConfig             `yaml:"csrf,omitempty"`
 	}
 	Http struct {
 		Config  *Config
 		Address string
-		Handler Handler
-	}
-
-	BufferedResponseWriter struct {
-		ResponseWriter
-		Code int
-		Body *bytes.Buffer
+		Router  *Router
 	}
 )
 
@@ -54,11 +50,10 @@ const (
 	AuthTokenTypeBearer = "bearer"
 )
 
-var (
-	_ ResponseWriter = new(BufferedResponseWriter)
-)
-
 func (c *Config) Default() {
+	if c.BufferedResponse == nil {
+		c.BufferedResponse = &BufferedResponseConfig{}
+	}
 	if c.Metrics == nil {
 		c.Metrics = &MetricsConfig{}
 	}
@@ -67,6 +62,35 @@ func (c *Config) Default() {
 	}
 	if c.Session == nil {
 		c.Session = &SessionConfig{TokenConfig: &TokenConfig{}}
+	}
+	if c.Csrf == nil {
+		c.Csrf = &CsrfConfig{TokenConfig: &TokenConfig{}}
+	}
+
+	//
+
+	if c.Metrics.Enable {
+		c.Metrics.Default()
+
+		c.BufferedResponse.Default()
+		c.BufferedResponse.SkipConfig.Default()
+		c.BufferedResponse.SkipPaths[c.Metrics.Path] = struct{}{}
+
+		c.Trace.Default()
+		c.Trace.SkipConfig.Default()
+		c.Trace.SkipPaths[c.Metrics.Path] = struct{}{}
+
+		c.Session.Default()
+		if c.Session.Enable {
+			c.Session.SkipConfig.Default()
+			c.Session.SkipPaths[c.Metrics.Path] = struct{}{}
+		}
+
+		c.Csrf.Default()
+		if c.Csrf.Enable {
+			c.Csrf.SkipConfig.Default()
+			c.Csrf.SkipPaths[c.Metrics.Path] = struct{}{}
+		}
 	}
 }
 
@@ -83,31 +107,39 @@ func WithAddress(addr string) Option {
 	return func(h *Http) { h.Address = addr }
 }
 
-func WithHandler(hr Handler) Option {
-	return func(h *Http) { h.Handler = hr }
+func WithRouter(r *Router) Option {
+	return func(h *Http) { h.Router = r }
 }
 
-func Compose(handler Handler, middlewares ...Middleware) Handler {
-	var (
-		middlewaresLen = len(middlewares)
-		middleware     Middleware
-	)
-	for n := range middlewares {
-		middleware = middlewares[middlewaresLen-1-n]
-		handler = middleware(handler)
+func WithProvide(cont *di.Container) Option {
+	return func(h *Http) {
+		di.MustProvide(cont, func() *Http { return h })
 	}
-	return handler
+}
+
+func WithInvoke(cont *di.Container, f di.Function) Option {
+	return func(h *Http) {
+		di.MustInvoke(cont, f)
+	}
+}
+
+func WithMiddleware(middlewares ...Middleware) Option {
+	return func(h *Http) {
+		for _, middleware := range middlewares {
+			h.Router.Use(middleware)
+		}
+	}
 }
 
 func (h *Http) ListenAndServe() error {
 	if h.Address == "" {
 		return errors.New("no address was defined for http server to listen on (use WithAddress Option)")
 	}
-	if h.Handler == nil {
-		return errors.New("no handler assigned to the server (use WithHandler Option)")
+	if h.Router == nil {
+		return errors.New("no router assigned to the server (use WithRouter Option)")
 	}
 	log.Info().Str("address", h.Address).Msg("starting http server")
-	return http.ListenAndServe(h.Address, h.Handler)
+	return http.ListenAndServe(h.Address, h.Router)
 }
 
 func New(c *Config, options ...Option) *Http {
@@ -120,22 +152,4 @@ func New(c *Config, options ...Option) *Http {
 	}
 
 	return h
-}
-
-//
-
-func (w *BufferedResponseWriter) WriteHeader(code int)          { w.Code = code }
-func (w *BufferedResponseWriter) Write(buf []byte) (int, error) { return w.Body.Write(buf) }
-func (w *BufferedResponseWriter) Flush() error {
-	w.ResponseWriter.WriteHeader(w.Code)
-	_, err := w.ResponseWriter.Write(w.Body.Bytes())
-	return err
-}
-
-func NewBufferedResponseWriter(w ResponseWriter) *BufferedResponseWriter {
-	return &BufferedResponseWriter{
-		ResponseWriter: w,
-		Code:           StatusOK,
-		Body:           bytes.NewBuffer(nil),
-	}
 }

@@ -15,12 +15,12 @@ var (
 )
 
 type TraceConfig struct {
-	SkipPaths map[string]struct{} `yaml:"skip-paths"`
+	*SkipConfig `yaml:",inline,omitempty"`
 }
 
 func (c *TraceConfig) Default() {
-	if c.SkipPaths == nil {
-		c.SkipPaths = map[string]struct{}{}
+	if c.SkipConfig == nil {
+		c.SkipConfig = &SkipConfig{}
 	}
 }
 
@@ -59,7 +59,7 @@ func RequestLogSet(r *Request, l log.Logger) *Request {
 
 //
 
-func Trace(c *TraceConfig) Middleware {
+func MiddlewareTrace(c *TraceConfig) Middleware {
 	return func(next Handler) Handler {
 		return HandlerFunc(func(w ResponseWriter, r *Request) {
 			requestId := RequestIdGet(r)
@@ -71,17 +71,18 @@ func Trace(c *TraceConfig) Middleware {
 			r = RequestIdSet(r, requestId)
 			r = RequestLogSet(r, l)
 
-			if _, ok := c.SkipPaths[r.URL.Path]; ok {
+			if Skip(c.SkipConfig, r) {
 				next.ServeHTTP(w, r)
-			} else {
-				m := httpsnoop.CaptureMetrics(next, w, r)
-
-				l.Info().
-					Int("code", m.Code).
-					Int64("written", m.Written).
-					Dur("duration", m.Duration).
-					Msg("request")
+				return
 			}
+
+			m := httpsnoop.CaptureMetrics(next, w, r)
+
+			l.Info().
+				Int("code", m.Code).
+				Int64("written", m.Written).
+				Dur("duration", m.Duration).
+				Msg("request")
 		})
 	}
 }

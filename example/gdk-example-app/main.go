@@ -7,7 +7,7 @@ import (
 )
 
 type Config struct {
-	Log  *log.Config  `yaml:"log"`
+	Log *log.Config `yaml:"log"`
 }
 
 func (c *Config) Default() {
@@ -20,9 +20,9 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-func (c *Config) LogConfig() *log.Config   { return c.Log }
+func (c *Config) LogConfig() *log.Config { return c.Log }
 
-var cfg = &Config{}
+var conf = &Config{}
 
 func main() {
 	cli.New(
@@ -30,11 +30,11 @@ func main() {
 		cli.WithUsage("GDK example application"),
 		cli.WithDescription("Example application showing features of GDK"),
 		cli.WithConfigTools(
-			cfg,
+			conf,
 			config.YamlUnmarshaler,
 			config.YamlMarshaler,
 		),
-		cli.WithLogTools(cfg.LogConfig),
+		cli.WithLogTools(conf.LogConfig),
 		cli.WithAction(func(ctx *cli.Context) error {
 			log.Info().Str("msg", "hello").Msg("greeting")
 			return nil
