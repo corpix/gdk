@@ -3,10 +3,12 @@ package http
 import (
 	"net/http"
 
+	"path/filepath"
+
 	"github.com/corpix/gdk/di"
 	"github.com/corpix/gdk/errors"
 	"github.com/corpix/gdk/log"
-	"path/filepath"
+	"github.com/corpix/gdk/template"
 )
 
 type (
@@ -27,6 +29,7 @@ type (
 		Trace            *TraceConfig            `yaml:"trace"`
 		Session          *SessionConfig          `yaml:"session"`
 		Csrf             *CsrfConfig             `yaml:"csrf"`
+		Template         *template.Config        `yaml:"template"`
 	}
 	Http struct {
 		Config  *Config
@@ -48,6 +51,7 @@ const (
 
 	HeaderRequestId     = "x-request-id"
 	HeaderAuthorization = "authorization"
+	HeaderContentType   = "content-type"
 
 	AuthTokenTypeBearer = "bearer"
 )
@@ -67,6 +71,9 @@ func (c *Config) Default() {
 	}
 	if c.Csrf == nil {
 		c.Csrf = &CsrfConfig{TokenConfig: &TokenConfig{}}
+	}
+	if c.Template == nil {
+		c.Template = &template.Config{}
 	}
 
 	//

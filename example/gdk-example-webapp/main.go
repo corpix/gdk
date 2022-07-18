@@ -10,6 +10,7 @@ import (
 	"github.com/corpix/gdk/di"
 	"github.com/corpix/gdk/http"
 	"github.com/corpix/gdk/log"
+	"github.com/corpix/gdk/template"
 )
 
 type Config struct {
@@ -24,6 +25,9 @@ func (c *Config) Default() {
 	if c.Http == nil {
 		c.Http = &http.Config{}
 	}
+
+	c.Http.Default()
+	c.Http.Template.Templates = templates
 }
 
 func (c *Config) Validate() error {
@@ -33,7 +37,14 @@ func (c *Config) Validate() error {
 func (c *Config) LogConfig() *log.Config   { return c.Log }
 func (c *Config) HttpConfig() *http.Config { return c.Http }
 
-var conf = &Config{}
+//
+
+var (
+	conf      = &Config{}
+	templates = map[string]string{
+		"hello": `<form method="post"><input type="hidden" name="_csrf" value="{{ csrf .session "/" }}"/><button type="submit"/>send</form>`,
+	}
+)
 
 //
 
@@ -52,20 +63,18 @@ func main() {
 			conf.HttpConfig,
 			http.WithInvoke(
 				di.Default,
-				func(h *http.Http, g *http.CsrfGenerator) {
-					// tpl, err := template.New("root", http.WithTemplateCsrf(conf.Http.Csrf)).
-					// 	Parse(`<form method="post"><input type="hidden" value="{{ csrf(req.Session) }}"/><button type="submit"/></form>`)
-					// if err != nil {
-					// 	panic(err)
-					// }
-
+				func(h *http.Http, g *http.CsrfGenerator, t *template.Template) {
 					h.Router.
 						HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-							t, err := g.Generate(http.RequestSessionMustGet(r), "/")
+							w.Header().Add(http.HeaderContentType, http.MimeTextHtml)
+							err := t.
+								Lookup("hello").
+								Execute(w, map[string]interface{}{
+									"session": http.RequestSessionMustGet(r),
+								})
 							if err != nil {
 								panic(err)
 							}
-							w.Write(t)
 						}).
 						Methods(http.MethodGet)
 

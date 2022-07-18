@@ -228,9 +228,18 @@ func MiddlewareCsrf(c *CsrfConfig, cont TokenContainer, enc TokenEncodeDecoder, 
 
 			tokenBytes = []byte(r.URL.Query().Get(c.Key))
 			if len(tokenBytes) == 0 {
+				err = r.ParseForm()
+				if err != nil {
+					l.Warn().Err(err).Msg("failed parse form to get csrf token")
+					goto fail
+				}
+				tokenBytes = []byte(r.Form.Get(c.Key))
+			}
+			if len(tokenBytes) == 0 {
 				l.Warn().Msg("no csrf token in query")
 				goto fail
 			}
+
 			if enc != nil {
 				tokenBytes, err = enc.Decode(tokenBytes)
 				if err != nil {

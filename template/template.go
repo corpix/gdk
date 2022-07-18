@@ -5,6 +5,7 @@ import (
 
 	sprig "github.com/Masterminds/sprig/v3"
 	"github.com/corpix/gdk/di"
+	"github.com/corpix/gdk/errors"
 )
 
 type (
@@ -21,6 +22,10 @@ type (
 	URL       = template.URL
 
 	Option func(*Template)
+
+	Config struct {
+		Templates map[string]string `yaml:"templates"`
+	}
 )
 
 var (
@@ -46,6 +51,25 @@ func WithProvide(cont *di.Container) Option {
 
 func WithInvoke(cont *di.Container, f di.Function) Option {
 	return func(t *Template) { di.MustInvoke(cont, f) }
+}
+
+func WithConfig(c *Config) Option {
+	return func(t *Template) {
+		for name, data := range c.Templates {
+			_, err := t.New(name).Parse(data)
+			if err != nil {
+				panic(errors.Wrap(err, "failed to parse"))
+			}
+		}
+	}
+}
+
+func WithFuncMap(fm ...FuncMap) Option {
+	return func(t *Template) {
+		for _, f := range fm {
+			t.Funcs(f)
+		}
+	}
 }
 
 func Parse(name string, data string) (*Template, error) {

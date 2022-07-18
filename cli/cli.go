@@ -9,6 +9,7 @@ import (
 	"github.com/corpix/gdk/http"
 	"github.com/corpix/gdk/log"
 	"github.com/corpix/gdk/metrics"
+	"github.com/corpix/gdk/template"
 
 	cli "github.com/urfave/cli/v2"
 )
@@ -331,6 +332,9 @@ func WithHttpTools(cfg func() *http.Config, extraOptions ...http.Option) Option 
 						options := []http.Option{
 							http.WithRouter(router),
 						}
+						templateOptions := []template.Option{}
+
+						//
 
 						// NOTE: buffered response middleware should be first middleware
 						// it is required when you use middleare like Session
@@ -374,6 +378,8 @@ func WithHttpTools(cfg func() *http.Config, extraOptions ...http.Option) Option 
 						if conf.Csrf != nil && conf.Csrf.Enable {
 							csrfCont := http.NewTokenContainer(conf.Csrf.Container)
 							csrfEnc := http.NewTokenEncodeDecoder(conf.Csrf.Encoder)
+							csrfGen := http.NewCsrfGenerator(conf.Csrf, csrfCont, csrfEnc)
+
 							middleware = append(
 								middleware,
 								http.MiddlewareCsrf(
@@ -381,9 +387,26 @@ func WithHttpTools(cfg func() *http.Config, extraOptions ...http.Option) Option 
 									http.NewTokenValidator(conf.Csrf.Validator),
 								),
 							)
-							di.MustProvide(di.Default, func() *http.CsrfGenerator {
-								return http.NewCsrfGenerator(conf.Csrf, csrfCont, csrfEnc)
-							})
+							di.MustProvide(
+								di.Default,
+								func() *http.CsrfGenerator { return csrfGen },
+							)
+
+							templateOptions = append(
+								templateOptions,
+								template.WithFuncMap(template.FuncMap{
+									"csrf": csrfGen.MustGenerateString,
+								}),
+							)
+						}
+
+						if len(conf.Template.Templates) > 0 {
+							templateOptions = append(
+								templateOptions,
+								template.WithConfig(conf.Template),
+								template.WithProvide(di.Default),
+							)
+							template.New("root", templateOptions...)
 						}
 
 						//
