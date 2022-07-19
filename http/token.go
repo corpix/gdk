@@ -31,7 +31,7 @@ type (
 		Validator *TokenValidatorConfig `yaml:"validator"`
 	}
 	Token struct {
-		nonce   uint64
+		nonce   uint
 		Header  TokenHeader  `json:"header"`
 		Payload TokenPayload `json:"payload"`
 	}
@@ -387,7 +387,7 @@ func (c *TokenContainerSecretBoxConfig) Expand() error {
 
 //
 
-func (s *Token) Nonce() uint64 { return s.nonce }
+func (s *Token) Nonce() uint { return s.nonce }
 
 func (s *Token) Get(key string) (interface{}, bool) {
 	v, ok := s.Payload[key]

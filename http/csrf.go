@@ -102,7 +102,7 @@ func CsrfTokenPathGet(t TokenKV) (string, error) {
 	return rawPath.(string), nil
 }
 
-func CsrfTokenNonceGet(t TokenKV) (uint64, error) {
+func CsrfTokenNonceGet(t TokenKV) (uint, error) {
 	rawNonce, ok := t.Get(string(CsrfPayloadKeyNonce))
 	if !ok {
 		return 0, errors.Errorf(
@@ -110,10 +110,23 @@ func CsrfTokenNonceGet(t TokenKV) (uint64, error) {
 			CsrfPayloadKeyNonce,
 		)
 	}
-	return rawNonce.(uint64), nil
+	// NOTE: this is because different format parsers use different types
+	// when unmarshaling numbers into interface{}
+	switch nonce := rawNonce.(type) {
+	case float64:
+		return uint(nonce), nil
+	case uint64:
+		return uint(nonce), nil
+	case uint:
+		return nonce, nil
+	case int:
+		return uint(nonce), nil
+	default:
+		panic(errors.Errorf("unknown csrf token nonce type %T for value %+v", rawNonce, rawNonce))
+	}
 }
 
-func SessionTokenCsrfNonceGet(t TokenKV) (uint64, error) {
+func SessionTokenCsrfNonceGet(t TokenKV) (uint, error) {
 	rawNonce, ok := t.Get(string(SessionPayloadKeyCsrfNonce))
 	if !ok {
 		return 0, errors.Errorf(
@@ -121,10 +134,23 @@ func SessionTokenCsrfNonceGet(t TokenKV) (uint64, error) {
 			SessionPayloadKeyCsrfNonce,
 		)
 	}
-	return rawNonce.(uint64), nil
+	// NOTE: this is because different format parsers use different types
+	// when unmarshaling numbers into interface{}
+	switch nonce := rawNonce.(type) {
+	case float64:
+		return uint(nonce), nil
+	case uint64:
+		return uint(nonce), nil
+	case uint:
+		return nonce, nil
+	case int:
+		return uint(nonce), nil
+	default:
+		panic(errors.Errorf("unknown session csrf token nonce type %T for value %+v", rawNonce, rawNonce))
+	}
 }
 
-func SessionTokenCsrfNonceSet(t TokenKV, nonce uint64) {
+func SessionTokenCsrfNonceSet(t TokenKV, nonce uint) {
 	t.Set(string(SessionPayloadKeyCsrfNonce), nonce)
 }
 
@@ -192,10 +218,10 @@ func MiddlewareCsrf(c *CsrfConfig, cont TokenContainer, enc TokenEncodeDecoder, 
 				tokenBytes      []byte
 				token           *Csrf
 				path            string
-				nonce           uint64
+				nonce           uint
 				session         *Session
 				sessionNonceBig *big.Int
-				sessionNonce    uint64
+				sessionNonce    uint
 			)
 
 			if Skip(c.SkipConfig, r) {
@@ -215,7 +241,7 @@ func MiddlewareCsrf(c *CsrfConfig, cont TokenContainer, enc TokenEncodeDecoder, 
 					l.Error().Err(err).Msg("failed to generate new csrf nonce")
 					goto fail
 				}
-				SessionTokenCsrfNonceSet(session, sessionNonceBig.Uint64())
+				SessionTokenCsrfNonceSet(session, uint(sessionNonceBig.Uint64()))
 			}
 
 			if granular {
@@ -296,8 +322,8 @@ func MiddlewareCsrf(c *CsrfConfig, cont TokenContainer, enc TokenEncodeDecoder, 
 			if nonce != sessionNonce {
 				l.Warn().
 					Interface("token", token).
-					Uint64("nonce", nonce).
-					Uint64("session-nonce", sessionNonce).
+					Uint("nonce", nonce).
+					Uint("session-nonce", sessionNonce).
 					Msg("csrf token nonce does not match csrf nonce stored inside session")
 				goto fail
 			}
