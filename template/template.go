@@ -21,7 +21,9 @@ type (
 	Template  = template.Template
 	URL       = template.URL
 
-	Option func(*Template)
+	Option     func(*Template)
+	Context    map[string]interface{}
+	ContextKey string
 
 	Config struct {
 		Templates map[string]string `yaml:"templates"`
@@ -42,6 +44,15 @@ var (
 	ParseFiles       = template.ParseFiles
 	ParseGlob        = template.ParseGlob
 )
+
+func (c Context) With(key ContextKey, value interface{}) Context {
+	c[string(key)] = value
+	return c
+}
+
+func NewContext() Context { return Context{} }
+
+//
 
 func WithProvide(cont *di.Container) Option {
 	return func(t *Template) {

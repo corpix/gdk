@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"time"
 
 	"github.com/corpix/gdk/cli"
@@ -37,12 +38,22 @@ func (c *Config) HttpConfig() *http.Config { return c.Http }
 
 //
 
+type TemplateName string
+
+const (
+	TemplateNameHello TemplateName = "hello"
+)
+
 var (
-	conf      = &Config{}
+	//go:embed hello.html
+	TemplateHello string
+
 	templates = map[string]string{
-		"hello": `<form method="post"><input type="hidden" name="_csrf" value="{{ csrf .session "/" }}"/><button type="submit"/>send</form>`,
+		string(TemplateNameHello): TemplateHello,
 	}
 )
+
+var conf = &Config{}
 
 //
 
@@ -67,9 +78,12 @@ func main() {
 							w.Header().Add(http.HeaderContentType, http.MimeTextHtml)
 							err := t.
 								Lookup("hello").
-								Execute(w, map[string]interface{}{
-									"session": http.RequestSessionMustGet(r),
-								})
+								Execute(w,
+									http.NewTemplateContext(r).With(
+										http.TemplateContextKeySession,
+										http.RequestSessionMustGet(r),
+									),
+								)
 							if err != nil {
 								panic(err)
 							}
