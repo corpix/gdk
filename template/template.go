@@ -2,10 +2,12 @@ package template
 
 import (
 	"html/template"
+	"path"
 
 	sprig "github.com/Masterminds/sprig/v3"
 	"github.com/corpix/gdk/di"
 	"github.com/corpix/gdk/errors"
+	"github.com/davecgh/go-spew/spew"
 )
 
 type (
@@ -87,8 +89,20 @@ func Parse(name string, data string) (*Template, error) {
 	return New(name).Parse(data)
 }
 
+func DefaultFuncMap() FuncMap {
+	m := sprig.FuncMap()
+	em := FuncMap{
+		"dump":     spew.Sdump,
+		"pathJoin": path.Join,
+	}
+	for k, v := range em {
+		m[k] = v
+	}
+	return m
+}
+
 func New(name string, options ...Option) *Template {
-	t := template.New(name).Funcs(sprig.FuncMap())
+	t := template.New(name).Funcs(DefaultFuncMap())
 	for _, option := range options {
 		option(t)
 	}

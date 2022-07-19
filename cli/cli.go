@@ -12,7 +12,16 @@ import (
 	"github.com/corpix/gdk/template"
 
 	cli "github.com/urfave/cli/v2"
+	"github.com/davecgh/go-spew/spew"
 )
+
+func init() {
+	// WARNING: changing this will affect whole application
+	// a lot of things may change
+	// for example:
+	// - template module use this to  provide `dump` helper
+	spew.Config.DisableMethods = true
+}
 
 type (
 	BoolFlag         = cli.BoolFlag
