@@ -77,7 +77,7 @@ func main() {
 						HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 							w.Header().Add(http.HeaderContentType, http.MimeTextHtml)
 							err := t.
-								Lookup("hello").
+								Lookup(string(TemplateNameHello)).
 								Execute(w,
 									http.NewTemplateContext(r).With(
 										http.TemplateContextKeySession,
