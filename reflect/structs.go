@@ -44,7 +44,7 @@ func walkStructIter(v reflect.Value, path []string, cb func(reflect.Value, []str
 	case reflect.Struct:
 		for n := 0; n < v.NumField(); n++ {
 			ft := t.Field(n)
-			if !StructFieldExported(ft) {
+			if !ft.IsExported() {
 				continue
 			}
 

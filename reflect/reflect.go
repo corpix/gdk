@@ -1,7 +1,9 @@
 package reflect
 
 import (
+	"fmt"
 	"reflect"
+	"sort"
 )
 
 type (
@@ -46,35 +48,6 @@ var (
 	ValueOf = reflect.ValueOf
 )
 
-func CheckValue(v interface{}) error {
-	val := reflect.ValueOf(v)
-	if val.Kind() != reflect.Ptr {
-		return NewErrPtrRequired(v)
-	}
-
-	return nil
-}
-
-func CheckStruct(reflectValue reflect.Value) error {
-	if reflectValue.Kind() != reflect.Struct {
-		return NewErrUnexpecterKind(
-			reflectValue.Kind(),
-			reflect.Struct,
-		)
-	}
-
-	return nil
-}
-
-func StructFieldExported(field reflect.StructField) bool {
-	// NOTE: thats a terrible way, to check if field is exported, could we do better?
-	// From reflect docs:
-	// PkgPath is the package path that qualifies a lower case (unexported)
-	// field name. It is empty for upper case (exported) field names.
-	// See https://golang.org/ref/spec#Uniqueness_of_identifiers
-	return field.PkgPath == ""
-}
-
 func IndirectValue(reflectValue reflect.Value) reflect.Value {
 	if reflectValue.Kind() == reflect.Ptr {
 		return reflectValue.Elem()
@@ -111,5 +84,26 @@ func IsNil(reflectValue reflect.Value) bool {
 	default:
 		return false
 	}
+}
 
+func MapKeys(v reflect.Value) []string {
+	err := ExpectKind(v.Type(), reflect.Map)
+	if err != nil {
+		panic(err)
+	}
+
+	rawKeys := v.MapKeys()
+	keys := make([]string, len(rawKeys))
+	n := 0
+	for _, key := range rawKeys {
+		keys[n] = fmt.Sprintf("%v", key.Interface())
+		n++
+	}
+	return keys
+}
+
+func MapSortedKeys(v reflect.Value) []string {
+	keys := MapKeys(v)
+	sort.Strings(keys)
+	return keys
 }
