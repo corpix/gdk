@@ -53,7 +53,8 @@ const (
 	HeaderAuthorization = "authorization"
 	HeaderContentType   = "content-type"
 
-	AuthTokenTypeBearer = "bearer"
+	AuthTypeBearer = "bearer"
+	AuthTypeBasic  = "basic"
 )
 
 func (c *Config) Default() {

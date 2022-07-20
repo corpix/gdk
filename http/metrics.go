@@ -46,7 +46,7 @@ func (c *MetricsConfig) Default() {
 		c.Path = "/metrics"
 	}
 	if c.AuthType == "" {
-		c.AuthType = AuthTokenTypeBearer
+		c.AuthType = AuthTypeBearer
 	}
 
 	if c.SkipConfig == nil {
@@ -59,7 +59,7 @@ func (c *MetricsConfig) Validate() error {
 		return errors.New("either define token or token-file, not both of them")
 	}
 
-	if strings.ToLower(c.AuthType) != AuthTokenTypeBearer {
+	if strings.ToLower(c.AuthType) != AuthTypeBearer {
 		// TODO: more token types + token encoding? not sure we need it now, but in future... maybe
 		return errors.New("at this moment only bearer token type is supported")
 	}
