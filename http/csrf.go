@@ -224,9 +224,8 @@ func MiddlewareCsrf(c *CsrfConfig, cont TokenContainer, enc TokenEncodeDecoder, 
 				sessionNonce    uint
 			)
 
-			if Skip(c.SkipConfig, r) {
-				h.ServeHTTP(w, r)
-				return
+			if Skip(c.SkipConfig, r) || !validationEnable {
+				goto next
 			}
 
 			l = RequestLogGet(r)
@@ -283,10 +282,6 @@ func MiddlewareCsrf(c *CsrfConfig, cont TokenContainer, enc TokenEncodeDecoder, 
 					Err(err).
 					Msg("failed decode csrf token container")
 				goto fail
-			}
-
-			if !validationEnable {
-				goto next
 			}
 
 			err = v.Validate(token)
