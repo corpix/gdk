@@ -43,6 +43,7 @@ type (
 	TokenKV      interface {
 		Get(key string) (interface{}, bool)
 		Set(key string, value interface{})
+		Del(key string)
 	}
 
 	TokenJwt struct {
@@ -397,6 +398,10 @@ func (s *Token) Get(key string) (interface{}, bool) {
 func (s *Token) Set(key string, value interface{}) {
 	s.Payload[key] = value
 	s.nonce++
+}
+
+func (s *Token) Del(key string) {
+	delete(s.Payload, key)
 }
 
 //
