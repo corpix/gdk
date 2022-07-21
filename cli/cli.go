@@ -11,8 +11,8 @@ import (
 	"github.com/corpix/gdk/metrics"
 	"github.com/corpix/gdk/template"
 
-	cli "github.com/urfave/cli/v2"
 	"github.com/davecgh/go-spew/spew"
+	cli "github.com/urfave/cli/v2"
 )
 
 func init() {
