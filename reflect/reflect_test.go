@@ -12,7 +12,14 @@ func TestMapKeys(t *testing.T) {
 		"world": {},
 		"!":     {},
 	}
-	assert.Equal(t, []string{"hello", "world", "!"}, MapKeys(ValueOf(m1)))
+	all := true
+	for _, key := range MapKeys(ValueOf(m1)) {
+		_, all = m1[key]
+		if !all {
+			break
+		}
+	}
+	assert.True(t, all)
 }
 
 func TestMapSortedKeys(t *testing.T) {
