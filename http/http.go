@@ -168,19 +168,10 @@ func WithRouter(r *Router) Option {
 
 func WithLogAvailableRoutes() Option {
 	return func(h *Http) {
-		err := h.Router.Walk(func(route *Route, router *Router, ancestors []*Route) error {
-			methods, err := route.GetMethods()
-			if err != nil {
-				return err
-			}
-			query, err := route.GetQueriesTemplates()
-			if err != nil {
-				return err
-			}
-			path, err := route.GetPathTemplate()
-			if err != nil {
-				return err
-			}
+		_ = h.Router.Walk(func(route *Route, router *Router, ancestors []*Route) error {
+			methods, _ := route.GetMethods()
+			query, _ := route.GetQueriesTemplates()
+			path, _ := route.GetPathTemplate()
 
 			log.Info().
 				Str("path", path).
@@ -190,9 +181,6 @@ func WithLogAvailableRoutes() Option {
 
 			return nil
 		})
-		if err != nil {
-			panic(err)
-		}
 	}
 }
 
