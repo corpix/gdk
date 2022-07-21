@@ -12,6 +12,7 @@ var (
 	Errorf    = errors.Errorf
 	Wrap      = errors.Wrap
 	Wrapf     = errors.Wrapf
+	Is        = errors.Is
 	Cause     = errors.Cause
 	HasType   = errors.HasType
 	WithStack = errors.WithStack
