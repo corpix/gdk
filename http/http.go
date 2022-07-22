@@ -170,6 +170,11 @@ func WithLogAvailableRoutes() Option {
 	return func(h *Http) {
 		_ = h.Router.Walk(func(route *Route, router *Router, ancestors []*Route) error {
 			methods, _ := route.GetMethods()
+			if len(methods) == 0 {
+				// just skip routes without methods
+				// routes like this could appear when PathPrefix used
+				return nil
+			}
 			query, _ := route.GetQueriesTemplates()
 			path, _ := route.GetPathTemplate()
 
