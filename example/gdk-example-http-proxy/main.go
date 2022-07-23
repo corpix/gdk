@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/corpix/gdk/cli"
 	"github.com/corpix/gdk/config"
+	"github.com/corpix/gdk/di"
 	"github.com/corpix/gdk/http"
 	"github.com/corpix/gdk/log"
 )
@@ -43,7 +44,14 @@ func main() {
 			config.YamlMarshaler,
 		),
 		cli.WithLogTools(conf.LogConfig),
-		cli.WithHttpTools(conf.HttpConfig),
+		cli.WithHttpTools(conf.HttpConfig, http.WithInvoke(
+			di.Default,
+			func(h *http.Http) {
+				h.Router.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
+					w.Write([]byte("hello"))
+				})
+			},
+		)),
 		cli.WithAction(func(ctx *cli.Context) error {
 			log.Info().Str("msg", "hello").Msg("greeting")
 			return nil

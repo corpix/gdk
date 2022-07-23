@@ -365,10 +365,6 @@ func WithHttpTools(cfg func() *http.Config, extraOptions ...http.Option) Option 
 							options = append(options, http.WithMetricsHandler(metrics.Default))
 						}
 
-						if conf.Proxy != nil && conf.Proxy.Enable {
-							options = append(options, http.WithProxy(conf.Proxy))
-						}
-
 						if conf.Session != nil && conf.Session.Enable {
 							store, err := http.NewTokenStore(
 								conf.Session.Store,
@@ -431,6 +427,15 @@ func WithHttpTools(cfg func() *http.Config, extraOptions ...http.Option) Option 
 							http.WithMiddleware(middleware...),
 						)
 						options = append(options, extraOptions...)
+
+						//
+
+						if conf.Proxy != nil && conf.Proxy.Enable {
+							options = append(options, http.WithProxy(conf.Proxy))
+						}
+
+						//
+
 						options = append(options, http.WithLogAvailableRoutes())
 
 						return http.New(conf, options...).ListenAndServe()
