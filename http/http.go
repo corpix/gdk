@@ -101,6 +101,10 @@ const (
 	AuthTypeBasic  = "basic"
 )
 
+var (
+	Redirect = http.Redirect
+)
+
 func (c *Config) Default() {
 	if c.BufferedResponse == nil {
 		c.BufferedResponse = &BufferedResponseConfig{}
