@@ -401,7 +401,11 @@ func (s *Token) Set(key string, value interface{}) {
 }
 
 func (s *Token) Del(key string) {
-	delete(s.Payload, key)
+	_, ok := s.Payload[key]
+	if ok {
+		delete(s.Payload, key)
+		s.nonce++
+	}
 }
 
 //
