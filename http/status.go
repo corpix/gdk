@@ -62,6 +62,7 @@ const ( // go doc -all net/http | rg '^\t+Status.+=' | awk '{print $1 " = http."
 	StatusTooManyRequests               = http.StatusTooManyRequests
 	StatusUnauthorized                  = http.StatusUnauthorized
 	StatusUnavailableForLegalReasons    = http.StatusUnavailableForLegalReasons
+	StatusCanceled                      = 499
 	StatusUnprocessableEntity           = http.StatusUnprocessableEntity
 	StatusUnsupportedMediaType          = http.StatusUnsupportedMediaType
 	StatusUpgradeRequired               = http.StatusUpgradeRequired

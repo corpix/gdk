@@ -29,6 +29,7 @@ type (
 		Trace            *TraceConfig            `yaml:"trace"`
 		Session          *SessionConfig          `yaml:"session"`
 		Csrf             *CsrfConfig             `yaml:"csrf"`
+		Proxy            *ProxyConfig            `yaml:"proxy"`
 		Template         *template.Config        `yaml:"template"`
 	}
 	Http struct {

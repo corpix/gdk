@@ -1,0 +1,13 @@
+http:
+  address: localhost:8080
+  metrics:
+    enable: true
+    token: insecure
+  proxy:
+    enable: true
+    upstreams:
+      default: "http://127.0.0.1:8081"
+  session:
+    enable: false
+  csrf:
+    enable: false

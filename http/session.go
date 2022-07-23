@@ -53,6 +53,10 @@ func (c *SessionConfig) Default() {
 }
 
 func (c *SessionConfig) Validate() error {
+	if !c.Enable {
+		return nil
+	}
+
 	if *c.Refresh <= 0 {
 		return errors.New("refresh should be larger than zero")
 	}
