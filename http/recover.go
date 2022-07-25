@@ -6,8 +6,16 @@ import (
 	"github.com/corpix/gdk/errors"
 )
 
-func MiddlewareRecover(handler func(error)) Middleware {
+type (
+	RecoverHandler func(ResponseWriter, *Request, error)
+)
+
+func MiddlewareRecover(errHandlerCtr func() RecoverHandler) Middleware {
 	return func(h Handler) Handler {
+		var errHandler RecoverHandler
+		if errHandlerCtr != nil {
+			errHandler = errHandlerCtr()
+		}
 		return HandlerFunc(func(w ResponseWriter, r *Request) {
 			defer func() {
 				if err := recover(); err != nil {
@@ -23,8 +31,8 @@ func MiddlewareRecover(handler func(error)) Middleware {
 					}
 					e = errors.WithStack(e)
 					l.Error().Stack().Err(e).Msg("panic recover")
-					if handler != nil {
-						handler(e)
+					if errHandler != nil {
+						errHandler(w, r, e)
 					}
 				}
 			}()

@@ -2,6 +2,7 @@ package main
 
 import (
 	_ "embed"
+	"fmt"
 	"time"
 
 	"github.com/corpix/gdk/cli"
@@ -58,6 +59,12 @@ var conf = &Config{}
 //
 
 func main() {
+	di.MustProvide(di.Default, func() http.RecoverHandler {
+		return func(w http.ResponseWriter, r *http.Request, err error) {
+			fmt.Println("panic also handled by custom user-defined handler")
+		}
+	})
+
 	cli.New(
 		cli.WithName("gdk-example-webapp"),
 		cli.WithUsage("GDK example web application"),
@@ -70,7 +77,6 @@ func main() {
 		cli.WithLogTools(conf.LogConfig),
 		cli.WithHttpTools(
 			conf.HttpConfig,
-			nil,
 			http.WithInvoke(
 				di.Default,
 				func(h *http.Http, t *template.Template) {
@@ -102,6 +108,11 @@ func main() {
 							w.Write([]byte(greet.(string)))
 						}).
 						Methods(http.MethodPost)
+
+					h.Router.
+						HandleFunc("/panic", func(w http.ResponseWriter, r *http.Request) {
+							panic("hello panic")
+						})
 				},
 			),
 		),

@@ -303,7 +303,7 @@ func WithLogTools(cfg func() *log.Config, extraOptions ...log.Option) Option {
 	)
 }
 
-func WithHttpTools(cfg func() *http.Config, errorHandler func(error), extraOptions ...http.Option) Option {
+func WithHttpTools(cfg func() *http.Config, extraOptions ...http.Option) Option {
 	return func(c *Cli) {
 		c.Commands = append(c.Commands, &Command{
 			Name:    "http",
@@ -355,7 +355,13 @@ func WithHttpTools(cfg func() *http.Config, errorHandler func(error), extraOptio
 						middleware = append(
 							middleware,
 							http.MiddlewareTrace(conf.Trace),
-							http.MiddlewareRecover(errorHandler),
+							http.MiddlewareRecover(func() http.RecoverHandler {
+								var errHandler http.RecoverHandler
+								_ = di.Invoke(di.Default, func(handler http.RecoverHandler) {
+									errHandler = handler
+								})
+								return errHandler
+							}),
 						)
 
 						//
