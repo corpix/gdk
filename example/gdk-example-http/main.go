@@ -46,7 +46,9 @@ func main() {
 			config.YamlMarshaler,
 		),
 		cli.WithLogTools(conf.LogConfig),
-		cli.WithHttpTools(conf.HttpConfig,
+		cli.WithHttpTools(
+			conf.HttpConfig,
+			nil,
 			http.WithInvoke(
 				di.Default,
 				func(h *http.Http) {

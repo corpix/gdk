@@ -70,6 +70,7 @@ func main() {
 		cli.WithLogTools(conf.LogConfig),
 		cli.WithHttpTools(
 			conf.HttpConfig,
+			nil,
 			http.WithInvoke(
 				di.Default,
 				func(h *http.Http, t *template.Template) {

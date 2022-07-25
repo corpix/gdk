@@ -6,7 +6,7 @@ import (
 	"github.com/corpix/gdk/errors"
 )
 
-func MiddlewareRecover() Middleware {
+func MiddlewareRecover(handler func(error)) Middleware {
 	return func(h Handler) Handler {
 		return HandlerFunc(func(w ResponseWriter, r *Request) {
 			defer func() {
@@ -21,7 +21,11 @@ func MiddlewareRecover() Middleware {
 					default:
 						e = errors.New(fmt.Sprint(err))
 					}
-					l.Error().Stack().Err(errors.WithStack(e)).Msg("panic recover")
+					e = errors.WithStack(e)
+					l.Error().Stack().Err(e).Msg("panic recover")
+					if handler != nil {
+						handler(e)
+					}
 				}
 			}()
 			h.ServeHTTP(w, r)
