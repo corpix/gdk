@@ -19,6 +19,7 @@ type (
 	Request        = http.Request
 	ResponseWriter = http.ResponseWriter
 	Response       = http.Response
+	Header         = http.Header
 	ContextKey     uint8
 
 	Config struct {
