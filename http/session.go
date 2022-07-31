@@ -15,6 +15,8 @@ type (
 		*SkipConfig  `yaml:",inline,omitempty"`
 	}
 	Session           = Token
+	SessionStore      TokenStore
+	SessionValidator  TokenValidator
 	SessionPayloadKey string
 )
 
@@ -35,16 +37,21 @@ func (c *SessionConfig) Default() {
 		c.Store.Type = string(TokenStoreTypeCookie)
 	}
 
-	if c.Validator.MaxAge == nil {
-		dur := 24 * time.Hour
-		c.Validator.MaxAge = &dur
+	if c.Validator == nil {
+		c.Validator = &TokenValidatorConfig{}
 	}
-	if c.Validator.TimeDrift == nil {
+	c.Validator.Default()
+	c.Validator.Expire.Default()
+	if c.Validator.Expire.MaxAge == nil {
+		dur := 24 * time.Hour
+		c.Validator.Expire.MaxAge = &dur
+	}
+	if c.Validator.Expire.TimeDrift == nil {
 		dur := 30 * time.Second
-		c.Validator.TimeDrift = &dur
+		c.Validator.Expire.TimeDrift = &dur
 	}
 	if c.Refresh == nil {
-		dur := *c.Validator.MaxAge / 2
+		dur := *c.Validator.Expire.MaxAge / 2
 		c.Refresh = &dur
 	}
 	if c.SkipConfig == nil {
@@ -95,7 +102,7 @@ func NewSession(c *SessionConfig) *Session {
 	return NewToken(c.TokenConfig)
 }
 
-func MiddlewareSession(c *SessionConfig, s TokenStore, v *TokenValidator) Middleware {
+func MiddlewareSession(c *SessionConfig, s SessionStore, v SessionValidator) Middleware {
 	return func(h Handler) Handler {
 		return HandlerFunc(func(w ResponseWriter, r *Request) {
 			if Skip(c.SkipConfig, r) {
@@ -106,7 +113,7 @@ func MiddlewareSession(c *SessionConfig, s TokenStore, v *TokenValidator) Middle
 			l := RequestLogGet(r)
 			flush := false
 
-			t, err := s.Load(r)
+			t, err := s.RequestLoad(r)
 			if err != nil {
 				t = NewSession(c)
 				l.Warn().
@@ -150,7 +157,7 @@ func MiddlewareSession(c *SessionConfig, s TokenStore, v *TokenValidator) Middle
 			h.ServeHTTP(w, r)
 
 			if flush || t.nonce > nonce {
-				err = s.Save(w, t)
+				_, err = s.RequestSave(w, r, t)
 				if err != nil {
 					l.Warn().
 						Interface("session", t).

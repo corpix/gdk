@@ -75,13 +75,15 @@ func (c *CsrfConfig) Default() {
 	if c.Validator == nil {
 		c.Validator = &TokenValidatorConfig{}
 	}
-	if c.Validator.MaxAge == nil {
+	c.Validator.Default()
+	c.Validator.Expire.Default()
+	if c.Validator.Expire.MaxAge == nil {
 		dur := 2 * time.Hour
-		c.Validator.MaxAge = &dur
+		c.Validator.Expire.MaxAge = &dur
 	}
-	if c.Validator.TimeDrift == nil {
+	if c.Validator.Expire.TimeDrift == nil {
 		dur := 30 * time.Second
-		c.Validator.TimeDrift = &dur
+		c.Validator.Expire.TimeDrift = &dur
 	}
 }
 
@@ -91,7 +93,7 @@ func (c *CsrfConfig) Validate() error {
 
 //
 
-func CsrfTokenPathGet(t TokenKV) (string, error) {
+func CsrfTokenPathGet(t TokenMap) (string, error) {
 	rawPath, ok := t.Get(string(CsrfPayloadKeyPath))
 	if !ok {
 		return "", errors.Errorf(
@@ -102,7 +104,7 @@ func CsrfTokenPathGet(t TokenKV) (string, error) {
 	return rawPath.(string), nil
 }
 
-func CsrfTokenNonceGet(t TokenKV) (uint, error) {
+func CsrfTokenNonceGet(t TokenMap) (uint, error) {
 	rawNonce, ok := t.Get(string(CsrfPayloadKeyNonce))
 	if !ok {
 		return 0, errors.Errorf(
@@ -126,7 +128,7 @@ func CsrfTokenNonceGet(t TokenKV) (uint, error) {
 	}
 }
 
-func SessionTokenCsrfNonceGet(t TokenKV) (uint, error) {
+func SessionTokenCsrfNonceGet(t TokenMap) (uint, error) {
 	rawNonce, ok := t.Get(string(SessionPayloadKeyCsrfNonce))
 	if !ok {
 		return 0, errors.Errorf(
@@ -150,7 +152,7 @@ func SessionTokenCsrfNonceGet(t TokenKV) (uint, error) {
 	}
 }
 
-func SessionTokenCsrfNonceSet(t TokenKV, nonce uint) {
+func SessionTokenCsrfNonceSet(t TokenMap, nonce uint) {
 	t.Set(string(SessionPayloadKeyCsrfNonce), nonce)
 }
 
@@ -206,7 +208,7 @@ func NewCsrf(c *CsrfConfig) *Csrf {
 	return NewToken(c.TokenConfig)
 }
 
-func MiddlewareCsrf(c *CsrfConfig, g *CsrfGenerator, v *TokenValidator) Middleware {
+func MiddlewareCsrf(c *CsrfConfig, g *CsrfGenerator, v TokenValidator) Middleware {
 	validationEnable := *c.Validator.Enable
 	granular := *c.Granular
 

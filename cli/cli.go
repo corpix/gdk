@@ -331,9 +331,7 @@ func WithHttpTools(cfg func() *http.Config, extraOptions ...http.Option) Option 
 						//
 
 						router := http.NewRouter(conf)
-						di.MustProvide(di.Default, func() *http.Router {
-							return router
-						})
+						di.MustProvide(di.Default, func() *http.Router { return router })
 
 						//
 
@@ -380,14 +378,18 @@ func WithHttpTools(cfg func() *http.Config, extraOptions ...http.Option) Option 
 							if err != nil {
 								return err
 							}
+							sessionValidator := http.SessionValidator(http.NewTokenValidator(conf.Session.Validator))
+							sessionStore := http.SessionStore(store)
 							middleware = append(
 								middleware,
 								http.MiddlewareSession(
 									conf.Session,
-									store,
-									http.NewTokenValidator(conf.Session.Validator),
+									sessionStore,
+									sessionValidator,
 								),
 							)
+							di.MustProvide(di.Default, func() http.SessionValidator { return sessionValidator })
+							di.MustProvide(di.Default, func() http.SessionStore { return sessionStore })
 						}
 
 						if conf.Csrf != nil && conf.Csrf.Enable {
@@ -399,10 +401,7 @@ func WithHttpTools(cfg func() *http.Config, extraOptions ...http.Option) Option 
 									http.NewTokenValidator(conf.Csrf.Validator),
 								),
 							)
-							di.MustProvide(
-								di.Default,
-								func() *http.CsrfGenerator { return csrf },
-							)
+							di.MustProvide(di.Default, func() *http.CsrfGenerator { return csrf })
 
 							templateOptions = append(
 								templateOptions,

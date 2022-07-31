@@ -40,7 +40,7 @@ type (
 		ValidBefore time.Time `json:"valid-before"`
 	}
 	TokenPayload map[string]interface{}
-	TokenKV      interface {
+	TokenMap     interface {
 		Get(key string) (interface{}, bool)
 		Set(key string, value interface{})
 		Del(key string)
@@ -59,9 +59,12 @@ type (
 	}
 	TokenStoreType string
 	TokenStore     interface {
-		Save(ResponseWriter, *Token) error
-		Load(*Request) (*Token, error)
-		Drop(ResponseWriter) error
+		Save(*Token) ([]byte, error)
+		RequestSave(ResponseWriter, *Request, *Token) ([]byte, error)
+		Load([]byte) (*Token, error)
+		RequestLoad(*Request) (*Token, error)
+		Drop([]byte) error
+		RequestDrop(ResponseWriter, *Request) error
 	}
 	TokenStoreCookieConfig struct {
 		Name     string         `yaml:"name"`
@@ -127,12 +130,20 @@ type (
 	TokenEncodeDecoder     encoding.EncodeDecoder
 
 	TokenValidatorConfig struct {
-		Enable    *bool          `yaml:"enable"`
+		Enable *bool                       `yaml:"enable"`
+		Type   string                      `yaml:"type"`
+		Expire *TokenValidatorExpireConfig `yaml:"expire"`
+	}
+	TokenValidatorExpireConfig struct {
 		MaxAge    *time.Duration `yaml:"max-age"`
 		TimeDrift *time.Duration `yaml:"time-drift"`
 	}
-	TokenValidator struct {
-		Config *TokenValidatorConfig
+	TokenValidatorType string
+	TokenValidator     interface {
+		Validate(*Token) error
+	}
+	TokenValidatorExpire struct {
+		Config *TokenValidatorExpireConfig
 	}
 )
 
@@ -160,6 +171,8 @@ const (
 	TokenJwtAlgorithmPS256 TokenJwtAlgorithm = jwt.PS256
 	TokenJwtAlgorithmPS384 TokenJwtAlgorithm = jwt.PS384
 	TokenJwtAlgorithmPS512 TokenJwtAlgorithm = jwt.PS512
+
+	TokenValidatorTypeExpire TokenValidatorType = "expire"
 )
 
 var (
@@ -191,6 +204,8 @@ var (
 	_ TokenContainer = new(TokenContainerJwt)
 	_ TokenContainer = new(TokenContainerMsgpack)
 	_ TokenContainer = new(TokenContainerSecretBox)
+
+	_ TokenValidator = new(TokenValidatorExpire)
 )
 
 //
@@ -240,7 +255,7 @@ func (c *TokenContainerConfig) Default() {
 }
 
 func (c *TokenContainerConfig) Validate() error {
-	switch TokenContainerType(c.Type) {
+	switch TokenContainerType(strings.ToLower(c.Type)) {
 	case
 		TokenContainerTypeJson,
 		TokenContainerTypeJwt,
@@ -259,6 +274,28 @@ func (c *TokenValidatorConfig) Default() {
 		v := true
 		c.Enable = &v
 	}
+	if c.Type == "" {
+		c.Type = string(TokenValidatorTypeExpire)
+	}
+	// NOTE: Expirity is a mandatory behavior of the token
+	// So, configuration should persist
+	// Because we will calculate validBefore field based on this values
+	if c.Expire == nil {
+		c.Expire = &TokenValidatorExpireConfig{}
+	}
+}
+
+func (c *TokenValidatorConfig) Validate() error {
+	switch TokenValidatorType(strings.ToLower(c.Type)) {
+	case
+		TokenValidatorTypeExpire:
+	default:
+		return errors.Errorf("unsupported validator type %q", c.Type)
+	}
+	return nil
+}
+
+func (c TokenValidatorExpireConfig) Default() {
 	if c.MaxAge == nil {
 		dur := 24 * time.Hour
 		c.MaxAge = &dur
@@ -269,7 +306,7 @@ func (c *TokenValidatorConfig) Default() {
 	}
 }
 
-func (c *TokenValidatorConfig) Validate() error {
+func (c *TokenValidatorExpireConfig) Validate() error {
 	if *c.MaxAge <= 0 {
 		return errors.New("max-age should be larger than zero")
 	}
@@ -279,7 +316,7 @@ func (c *TokenValidatorConfig) Validate() error {
 	return nil
 }
 
-func (v *TokenValidator) Validate(t *Token) error {
+func (v *TokenValidatorExpire) Validate(t *Token) error {
 	now := time.Now()
 
 	if now.Before(t.Header.ValidAfter) {
@@ -309,8 +346,17 @@ func (v *TokenValidator) Validate(t *Token) error {
 	return nil
 }
 
-func NewTokenValidator(c *TokenValidatorConfig) *TokenValidator {
-	return &TokenValidator{
+func NewTokenValidator(c *TokenValidatorConfig) TokenValidator {
+	switch TokenValidatorType(strings.ToLower(c.Type)) {
+	case TokenValidatorTypeExpire:
+		return NewTokenValidatorExpire(c.Expire)
+	default:
+		panic(errors.Errorf("unsupported validator type %q", c.Type))
+	}
+}
+
+func NewTokenValidatorExpire(c *TokenValidatorExpireConfig) *TokenValidatorExpire {
+	return &TokenValidatorExpire{
 		Config: c,
 	}
 }
@@ -416,7 +462,7 @@ func NewToken(c *TokenConfig) *Token {
 		nonce: 0,
 		Header: TokenHeader{
 			ValidAfter:  now,
-			ValidBefore: now.Add(*c.Validator.MaxAge),
+			ValidBefore: now.Add(*c.Validator.Expire.MaxAge),
 		},
 		Payload: TokenPayload{},
 	}
@@ -496,17 +542,25 @@ func (s *TokenStoreCookie) cookie() *Cookie {
 	}
 }
 
-func (s *TokenStoreCookie) Save(w ResponseWriter, t *Token) error {
+func (s *TokenStoreCookie) Save(t *Token) ([]byte, error) {
 	buf, err := s.Container.Encode(t)
 	if err != nil {
-		return errors.Wrap(err, "failed to encode container")
+		return nil, errors.Wrap(err, "failed to encode container")
 	}
 
 	if s.EncodeDecoder != nil {
 		buf, err = s.EncodeDecoder.Encode(buf)
 		if err != nil {
-			return errors.Wrap(err, "failed to encode cookie value")
+			return nil, errors.Wrap(err, "failed to encode cookie value")
 		}
+	}
+	return buf, nil
+}
+
+func (s *TokenStoreCookie) RequestSave(w ResponseWriter, r *Request, t *Token) ([]byte, error) {
+	buf, err := s.Save(t)
+	if err != nil {
+		return nil, err
 	}
 
 	cookie := s.cookie()
@@ -517,17 +571,11 @@ func (s *TokenStoreCookie) Save(w ResponseWriter, t *Token) error {
 	}
 
 	CookieSet(w, cookie)
-	return nil
+	return buf, nil
 }
 
-func (s *TokenStoreCookie) Load(r *Request) (*Token, error) {
-	cookie, err := CookieGet(r, s.Config.Name)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get cookie from request")
-	}
-
-	buf := []byte(cookie.Value)
-
+func (s *TokenStoreCookie) Load(buf []byte) (*Token, error) {
+	var err error
 	if s.EncodeDecoder != nil {
 		buf, err = s.EncodeDecoder.Decode(buf)
 		if err != nil {
@@ -539,11 +587,29 @@ func (s *TokenStoreCookie) Load(r *Request) (*Token, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to decode container")
 	}
-
 	return t, nil
 }
 
-func (s *TokenStoreCookie) Drop(w ResponseWriter) error {
+func (s *TokenStoreCookie) RequestLoad(r *Request) (*Token, error) {
+	cookie, err := CookieGet(r, s.Config.Name)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get cookie from request")
+	}
+
+	t, err := s.Load([]byte(cookie.Value))
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+func (s *TokenStoreCookie) Drop(buf []byte) error {
+	// NOTE: nothing to do, buf is the session itself, we should only drop the cookie
+	// which is handled by RequestDrop(...)
+	return nil
+}
+
+func (s *TokenStoreCookie) RequestDrop(w ResponseWriter, r *Request) error {
 	cookie := s.cookie()
 	cookie.Expires = time.Time{} // 0001-01-01 00:00:00 +0000 UTC
 
