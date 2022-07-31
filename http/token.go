@@ -295,7 +295,7 @@ func (c *TokenValidatorConfig) Validate() error {
 	return nil
 }
 
-func (c TokenValidatorExpireConfig) Default() {
+func (c *TokenValidatorExpireConfig) Default() {
 	if c.MaxAge == nil {
 		dur := 24 * time.Hour
 		c.MaxAge = &dur
