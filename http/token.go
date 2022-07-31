@@ -567,20 +567,20 @@ func (s *TokenStoreCookie) Save(t *Token) ([]byte, error) {
 }
 
 func (s *TokenStoreCookie) RequestSave(w ResponseWriter, r *Request, t *Token) ([]byte, error) {
-	buf, err := s.Save(t)
+	id, err := s.Save(t)
 	if err != nil {
 		return nil, err
 	}
 
 	cookie := s.cookie()
-	cookie.Value = string(buf)
+	cookie.Value = string(id)
 	if s.Config.MaxAge != nil {
 		cookie.MaxAge = int(*s.Config.MaxAge / time.Second)
 		cookie.Expires = time.Now().Add(*s.Config.MaxAge)
 	}
 
 	CookieSet(w, cookie)
-	return buf, nil
+	return id, nil
 }
 
 func (s *TokenStoreCookie) Load(id []byte) (*Token, error) {
@@ -600,12 +600,11 @@ func (s *TokenStoreCookie) Load(id []byte) (*Token, error) {
 }
 
 func (s *TokenStoreCookie) RequestLoad(r *Request) (*Token, error) {
-	cookie, err := CookieGet(r, s.Config.Name)
+	id, err := s.Id(r)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get cookie from request")
+		return nil, err
 	}
-
-	t, err := s.Load([]byte(cookie.Value))
+	t, err := s.Load(id)
 	if err != nil {
 		return nil, err
 	}
