@@ -192,11 +192,11 @@ func (g *CsrfGenerator) MustGenerateString(sess *Session, path string) string {
 	return string(g.MustGenerate(sess, path))
 }
 
-func NewCsrfGenerator(c *CsrfConfig, cont TokenContainer, enc TokenEncodeDecoder) *CsrfGenerator {
+func NewCsrfGenerator(c *CsrfConfig) *CsrfGenerator {
 	return &CsrfGenerator{
 		Config:        c,
-		Container:     cont,
-		EncodeDecoder: enc,
+		Container:     NewTokenContainer(c.Container),
+		EncodeDecoder: NewTokenEncodeDecoder(c.Encoder),
 	}
 }
 
@@ -206,7 +206,7 @@ func NewCsrf(c *CsrfConfig) *Csrf {
 	return NewToken(c.TokenConfig)
 }
 
-func MiddlewareCsrf(c *CsrfConfig, cont TokenContainer, enc TokenEncodeDecoder, v *TokenValidator) Middleware {
+func MiddlewareCsrf(c *CsrfConfig, g *CsrfGenerator, v *TokenValidator) Middleware {
 	validationEnable := *c.Validator.Enable
 	granular := *c.Granular
 
@@ -265,8 +265,8 @@ func MiddlewareCsrf(c *CsrfConfig, cont TokenContainer, enc TokenEncodeDecoder, 
 				goto fail
 			}
 
-			if enc != nil {
-				tokenBytes, err = enc.Decode(tokenBytes)
+			if g.EncodeDecoder != nil {
+				tokenBytes, err = g.EncodeDecoder.Decode(tokenBytes)
 				if err != nil {
 					l.Warn().
 						Bytes("token", tokenBytes).
@@ -275,7 +275,7 @@ func MiddlewareCsrf(c *CsrfConfig, cont TokenContainer, enc TokenEncodeDecoder, 
 					goto fail
 				}
 			}
-			token, err = cont.Decode(tokenBytes)
+			token, err = g.Container.Decode(tokenBytes)
 			if err != nil {
 				l.Warn().
 					Bytes("token", tokenBytes).
@@ -340,15 +340,10 @@ func MiddlewareCsrf(c *CsrfConfig, cont TokenContainer, enc TokenEncodeDecoder, 
 	}
 }
 
-func WithCsrfTemplateFuncMap(c *CsrfConfig) template.Option {
-	csrf := NewCsrfGenerator(
-		c,
-		NewTokenContainer(c.Container),
-		NewTokenEncodeDecoder(c.Encoder),
-	)
+func WithCsrfTemplateFuncMap(g *CsrfGenerator) template.Option {
 	return func(t *template.Template) {
 		t.Funcs(template.FuncMap(map[string]interface{}{
-			"csrf": csrf.MustGenerateString,
+			"csrf": g.MustGenerateString,
 		}))
 	}
 }

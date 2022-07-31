@@ -391,27 +391,22 @@ func WithHttpTools(cfg func() *http.Config, extraOptions ...http.Option) Option 
 						}
 
 						if conf.Csrf != nil && conf.Csrf.Enable {
-							csrfCont := http.NewTokenContainer(conf.Csrf.Container)
-							csrfEnc := http.NewTokenEncodeDecoder(conf.Csrf.Encoder)
-							csrfGen := http.NewCsrfGenerator(conf.Csrf, csrfCont, csrfEnc)
-
+							csrf := http.NewCsrfGenerator(conf.Csrf)
 							middleware = append(
 								middleware,
 								http.MiddlewareCsrf(
-									conf.Csrf, csrfCont, csrfEnc,
+									conf.Csrf, csrf,
 									http.NewTokenValidator(conf.Csrf.Validator),
 								),
 							)
 							di.MustProvide(
 								di.Default,
-								func() *http.CsrfGenerator { return csrfGen },
+								func() *http.CsrfGenerator { return csrf },
 							)
 
 							templateOptions = append(
 								templateOptions,
-								template.WithFuncMap(template.FuncMap{
-									"csrf": csrfGen.MustGenerateString,
-								}),
+								http.WithCsrfTemplateFuncMap(csrf),
 							)
 						}
 
