@@ -59,6 +59,7 @@ type (
 	}
 	TokenStoreType string
 	TokenStore     interface {
+		Id(*Request) ([]byte, error)
 		Save(*Token) ([]byte, error)
 		RequestSave(ResponseWriter, *Request, *Token) ([]byte, error)
 		Load([]byte) (*Token, error)
@@ -542,19 +543,27 @@ func (s *TokenStoreCookie) cookie() *Cookie {
 	}
 }
 
+func (s *TokenStoreCookie) Id(r *Request) ([]byte, error) {
+	cookie, err := CookieGet(r, s.Config.Name)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get cookie from request")
+	}
+	return []byte(cookie.Value), nil
+}
+
 func (s *TokenStoreCookie) Save(t *Token) ([]byte, error) {
-	buf, err := s.Container.Encode(t)
+	id, err := s.Container.Encode(t)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to encode container")
 	}
 
 	if s.EncodeDecoder != nil {
-		buf, err = s.EncodeDecoder.Encode(buf)
+		id, err = s.EncodeDecoder.Encode(id)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to encode cookie value")
 		}
 	}
-	return buf, nil
+	return id, nil
 }
 
 func (s *TokenStoreCookie) RequestSave(w ResponseWriter, r *Request, t *Token) ([]byte, error) {
@@ -574,16 +583,16 @@ func (s *TokenStoreCookie) RequestSave(w ResponseWriter, r *Request, t *Token) (
 	return buf, nil
 }
 
-func (s *TokenStoreCookie) Load(buf []byte) (*Token, error) {
+func (s *TokenStoreCookie) Load(id []byte) (*Token, error) {
 	var err error
 	if s.EncodeDecoder != nil {
-		buf, err = s.EncodeDecoder.Decode(buf)
+		id, err = s.EncodeDecoder.Decode(id)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to decode cookie value")
 		}
 	}
 
-	t, err := s.Container.Decode(buf)
+	t, err := s.Container.Decode(id)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to decode container")
 	}
@@ -603,7 +612,7 @@ func (s *TokenStoreCookie) RequestLoad(r *Request) (*Token, error) {
 	return t, nil
 }
 
-func (s *TokenStoreCookie) Drop(buf []byte) error {
+func (s *TokenStoreCookie) Drop(id []byte) error {
 	// NOTE: nothing to do, buf is the session itself, we should only drop the cookie
 	// which is handled by RequestDrop(...)
 	return nil
