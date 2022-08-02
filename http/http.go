@@ -13,16 +13,6 @@ import (
 )
 
 type (
-	Option         func(*Http)
-	Handler        = http.Handler
-	HandlerFunc    = http.HandlerFunc
-	Middleware     = func(Handler) Handler
-	Request        = http.Request
-	ResponseWriter = http.ResponseWriter
-	Response       = http.Response
-	Header         = http.Header
-	ContextKey     uint8
-
 	Config struct {
 		Url              *UrlConfig              `yaml:"url"`
 		Address          string                  `yaml:"address"`
@@ -35,15 +25,27 @@ type (
 		Proxy            *ProxyConfig            `yaml:"proxy"`
 		Template         *template.Config        `yaml:"template"`
 	}
-	UrlConfig struct {
-		Scheme   string `yaml:"scheme"`
-		Hostname string `yaml:"hostname"`
-	}
 	Http struct {
 		Config  *Config
 		Address string
 		Router  *Router
 	}
+	Option         func(*Http)
+	Handler        = http.Handler
+	HandlerFunc    = http.HandlerFunc
+	Middleware     = func(Handler) Handler
+	Request        = http.Request
+	ResponseWriter = http.ResponseWriter
+	Response       = http.Response
+	Header         = http.Header
+	ContextKey     uint8
+
+	UrlConfig struct {
+		Scheme   string `yaml:"scheme"`
+		Hostname string `yaml:"hostname"`
+	}
+	Url       = url.URL
+	UrlOption func(*Url)
 )
 
 const (
@@ -231,11 +233,14 @@ func WithMiddleware(middlewares ...Middleware) Option {
 	}
 }
 
-func (h *Http) Url(u *url.URL) *url.URL {
+func (h *Http) Url(u *url.URL, options ...UrlOption) *url.URL {
 	uu := *u
 	uu.Scheme = h.Config.Url.Scheme
 	if h.Config.Url.Hostname != "" {
 		uu.Host = h.Config.Url.Hostname
+	}
+	for _, option := range options {
+		option(&uu)
 	}
 	return &uu
 }
