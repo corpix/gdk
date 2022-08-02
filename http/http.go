@@ -2,6 +2,7 @@ package http
 
 import (
 	"net/http"
+	"net/url"
 
 	"path/filepath"
 
@@ -23,6 +24,7 @@ type (
 	ContextKey     uint8
 
 	Config struct {
+		Url              *UrlConfig              `yaml:"url"`
 		Address          string                  `yaml:"address"`
 		Prefix           string                  `yaml:"prefix"`
 		BufferedResponse *BufferedResponseConfig `yaml:"buffered-response"`
@@ -32,6 +34,10 @@ type (
 		Csrf             *CsrfConfig             `yaml:"csrf"`
 		Proxy            *ProxyConfig            `yaml:"proxy"`
 		Template         *template.Config        `yaml:"template"`
+	}
+	UrlConfig struct {
+		Scheme   string `yaml:"scheme"`
+		Hostname string `yaml:"hostname"`
 	}
 	Http struct {
 		Config  *Config
@@ -50,6 +56,9 @@ const (
 	MethodConnect = http.MethodConnect
 	MethodOptions = http.MethodOptions
 	MethodTrace   = http.MethodTrace
+
+	SchemeHttp  = "http"
+	SchemeHttps = "https"
 
 	HeaderAccept                          = "Accept"
 	HeaderAcceptEncoding                  = "Accept-Encoding"
@@ -108,6 +117,9 @@ var (
 )
 
 func (c *Config) Default() {
+	if c.Url == nil {
+		c.Url = &UrlConfig{}
+	}
 	if c.BufferedResponse == nil {
 		c.BufferedResponse = &BufferedResponseConfig{}
 	}
@@ -162,6 +174,12 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+func (c *UrlConfig) Default() {
+	if c.Scheme == "" {
+		c.Scheme = SchemeHttp
+	}
+}
+
 //
 
 func WithAddress(addr string) Option {
@@ -211,6 +229,15 @@ func WithMiddleware(middlewares ...Middleware) Option {
 			h.Router.Use(middleware)
 		}
 	}
+}
+
+func (h *Http) Url(u *url.URL) *url.URL {
+	uu := *u
+	uu.Scheme = h.Config.Url.Scheme
+	if h.Config.Url.Hostname != "" {
+		uu.Host = h.Config.Url.Hostname
+	}
+	return &uu
 }
 
 func (h *Http) ListenAndServe() error {
