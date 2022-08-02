@@ -14,10 +14,19 @@ type (
 		*TokenConfig `yaml:",inline,omitempty"`
 		*SkipConfig  `yaml:",inline,omitempty"`
 	}
-	Session           = Token
-	SessionStore      TokenStore
-	SessionValidator  TokenValidator
-	SessionPayloadKey string
+	Session              = Token
+	SessionStore         TokenStore
+	SessionValidator     TokenValidator
+	SessionEncodeDecoder TokenEncodeDecoder
+	SessionContainer     TokenContainer
+	SessionPayloadKey    string
+	SessionService       struct {
+		Config        *SessionConfig
+		Container     SessionContainer
+		EncodeDecoder SessionEncodeDecoder
+		Validator     SessionValidator
+		Store         SessionStore
+	}
 )
 
 func (c *SessionConfig) Default() {
@@ -102,10 +111,27 @@ func NewSession(c *SessionConfig) *Session {
 	return NewToken(c.TokenConfig)
 }
 
-func MiddlewareSession(c *SessionConfig, s SessionStore, v SessionValidator) Middleware {
+func NewSessionService(c *SessionConfig) *SessionService {
+	srv := &SessionService{
+		Config:        c,
+		Container:     NewTokenContainer(c.Container),
+		EncodeDecoder: NewTokenEncodeDecoder(c.Encoder),
+		Validator:     NewTokenValidator(c.Validator),
+	}
+
+	store, err := NewTokenStore(c.Store, srv.Container, srv.EncodeDecoder)
+	if err != nil {
+		panic(err)
+	}
+
+	srv.Store = store
+	return srv
+}
+
+func MiddlewareSession(srv *SessionService) Middleware {
 	return func(h Handler) Handler {
 		return HandlerFunc(func(w ResponseWriter, r *Request) {
-			if Skip(c.SkipConfig, r) {
+			if Skip(srv.Config.SkipConfig, r) {
 				h.ServeHTTP(w, r)
 				return
 			}
@@ -113,9 +139,9 @@ func MiddlewareSession(c *SessionConfig, s SessionStore, v SessionValidator) Mid
 			l := RequestLogGet(r)
 			flush := false
 
-			t, err := s.RequestLoad(r)
+			t, err := srv.Store.RequestLoad(r)
 			if err != nil {
-				t = NewSession(c)
+				t = NewSession(srv.Config)
 				l.Warn().
 					Interface("session", t).
 					Err(err).
@@ -123,19 +149,19 @@ func MiddlewareSession(c *SessionConfig, s SessionStore, v SessionValidator) Mid
 				flush = true
 			}
 
-			if *c.Validator.Enable {
-				err = v.Validate(t)
+			if *srv.Config.Validator.Enable {
+				err = srv.Validator.Validate(t)
 				if err != nil {
 					l.Warn().
 						Interface("session", t).
 						Err(err).
 						Msg("failed to validate session, creating new")
-					t = NewToken(c.TokenConfig)
+					t = NewSession(srv.Config)
 					flush = true
 				}
 
-				if t.Header.ValidAfter.Add(*c.Refresh).Before(time.Now()) {
-					tc := NewToken(c.TokenConfig)
+				if t.Header.ValidAfter.Add(*srv.Config.Refresh).Before(time.Now()) {
+					tc := NewSession(srv.Config)
 					tc.Payload = t.Payload
 					l.Trace().
 						Interface("expiring-session", t).
@@ -157,7 +183,7 @@ func MiddlewareSession(c *SessionConfig, s SessionStore, v SessionValidator) Mid
 			h.ServeHTTP(w, r)
 
 			if flush || t.nonce > nonce {
-				_, err = s.RequestSave(w, r, t)
+				_, err = srv.Store.RequestSave(w, r, t)
 				if err != nil {
 					l.Warn().
 						Interface("session", t).

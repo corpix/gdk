@@ -22,12 +22,16 @@ type (
 		*TokenConfig `yaml:",inline,omitempty"`
 		*SkipConfig  `yaml:",inline,omitempty"`
 	}
-	Csrf           = Token
-	CsrfPayloadKey string
-	CsrfGenerator  struct {
+	Csrf                   = Token
+	CsrfPayloadKey         string
+	CsrfTokenContainer     TokenContainer
+	CsrfTokenEncodeDecoder TokenEncodeDecoder
+	CsrfTokenValidator     TokenValidator
+	CsrfTokenService       struct {
 		Config        *CsrfConfig
-		Container     TokenContainer
-		EncodeDecoder TokenEncodeDecoder
+		Container     CsrfTokenContainer
+		EncodeDecoder CsrfTokenEncodeDecoder
+		Validator     CsrfTokenValidator
 	}
 )
 
@@ -158,7 +162,7 @@ func SessionTokenCsrfNonceSet(t TokenMap, nonce uint) {
 
 //
 
-func (g *CsrfGenerator) Generate(sess *Session, path string) ([]byte, error) {
+func (g *CsrfTokenService) Generate(sess *Session, path string) ([]byte, error) {
 	csrf := NewCsrf(g.Config)
 	csrf.Payload[string(CsrfPayloadKeyPath)] = path
 	nonce, _ := sess.Get(string(SessionPayloadKeyCsrfNonce))
@@ -174,7 +178,7 @@ func (g *CsrfGenerator) Generate(sess *Session, path string) ([]byte, error) {
 	return tokenBytes, nil
 }
 
-func (g *CsrfGenerator) GenerateString(sess *Session, path string) (string, error) {
+func (g *CsrfTokenService) GenerateString(sess *Session, path string) (string, error) {
 	t, err := g.Generate(sess, path)
 	if err != nil {
 		return "", err
@@ -182,7 +186,7 @@ func (g *CsrfGenerator) GenerateString(sess *Session, path string) (string, erro
 	return string(t), nil
 }
 
-func (g *CsrfGenerator) MustGenerate(sess *Session, path string) []byte {
+func (g *CsrfTokenService) MustGenerate(sess *Session, path string) []byte {
 	t, err := g.Generate(sess, path)
 	if err != nil {
 		panic(err)
@@ -190,15 +194,16 @@ func (g *CsrfGenerator) MustGenerate(sess *Session, path string) []byte {
 	return t
 }
 
-func (g *CsrfGenerator) MustGenerateString(sess *Session, path string) string {
+func (g *CsrfTokenService) MustGenerateString(sess *Session, path string) string {
 	return string(g.MustGenerate(sess, path))
 }
 
-func NewCsrfGenerator(c *CsrfConfig) *CsrfGenerator {
-	return &CsrfGenerator{
+func NewCsrfTokenService(c *CsrfConfig) *CsrfTokenService {
+	return &CsrfTokenService{
 		Config:        c,
 		Container:     NewTokenContainer(c.Container),
 		EncodeDecoder: NewTokenEncodeDecoder(c.Encoder),
+		Validator:     NewTokenValidator(c.Validator),
 	}
 }
 
@@ -208,9 +213,9 @@ func NewCsrf(c *CsrfConfig) *Csrf {
 	return NewToken(c.TokenConfig)
 }
 
-func MiddlewareCsrf(c *CsrfConfig, g *CsrfGenerator, v TokenValidator) Middleware {
-	validationEnable := *c.Validator.Enable
-	granular := *c.Granular
+func MiddlewareCsrf(srv *CsrfTokenService) Middleware {
+	validationEnable := *srv.Config.Validator.Enable
+	granular := *srv.Config.Granular
 
 	return func(h Handler) Handler {
 		return HandlerFunc(func(w ResponseWriter, r *Request) {
@@ -226,7 +231,7 @@ func MiddlewareCsrf(c *CsrfConfig, g *CsrfGenerator, v TokenValidator) Middlewar
 				sessionNonce    uint
 			)
 
-			if Skip(c.SkipConfig, r) || !validationEnable {
+			if Skip(srv.Config.SkipConfig, r) || !validationEnable {
 				goto next
 			}
 
@@ -246,29 +251,29 @@ func MiddlewareCsrf(c *CsrfConfig, g *CsrfGenerator, v TokenValidator) Middlewar
 			}
 
 			if granular {
-				if _, ok := c.Methods[r.Method]; !ok {
+				if _, ok := srv.Config.Methods[r.Method]; !ok {
 					goto next
 				}
 			}
 
 			//
 
-			tokenBytes = []byte(r.URL.Query().Get(c.Key))
+			tokenBytes = []byte(r.URL.Query().Get(srv.Config.Key))
 			if len(tokenBytes) == 0 {
 				err = r.ParseForm()
 				if err != nil {
 					l.Warn().Err(err).Msg("failed parse form to get csrf token")
 					goto fail
 				}
-				tokenBytes = []byte(r.Form.Get(c.Key))
+				tokenBytes = []byte(r.Form.Get(srv.Config.Key))
 			}
 			if len(tokenBytes) == 0 {
 				l.Warn().Msg("no csrf token in query")
 				goto fail
 			}
 
-			if g.EncodeDecoder != nil {
-				tokenBytes, err = g.EncodeDecoder.Decode(tokenBytes)
+			if srv.EncodeDecoder != nil {
+				tokenBytes, err = srv.EncodeDecoder.Decode(tokenBytes)
 				if err != nil {
 					l.Warn().
 						Bytes("token", tokenBytes).
@@ -277,7 +282,7 @@ func MiddlewareCsrf(c *CsrfConfig, g *CsrfGenerator, v TokenValidator) Middlewar
 					goto fail
 				}
 			}
-			token, err = g.Container.Decode(tokenBytes)
+			token, err = srv.Container.Decode(tokenBytes)
 			if err != nil {
 				l.Warn().
 					Bytes("token", tokenBytes).
@@ -286,7 +291,7 @@ func MiddlewareCsrf(c *CsrfConfig, g *CsrfGenerator, v TokenValidator) Middlewar
 				goto fail
 			}
 
-			err = v.Validate(token)
+			err = srv.Validator.Validate(token)
 			if err != nil {
 				l.Warn().
 					Interface("token", token).
@@ -342,7 +347,7 @@ func MiddlewareCsrf(c *CsrfConfig, g *CsrfGenerator, v TokenValidator) Middlewar
 	}
 }
 
-func WithCsrfTemplateFuncMap(g *CsrfGenerator) template.Option {
+func WithCsrfTemplateFuncMap(g *CsrfTokenService) template.Option {
 	return func(t *template.Template) {
 		t.Funcs(template.FuncMap(map[string]interface{}{
 			"csrf": g.MustGenerateString,

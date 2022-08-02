@@ -370,38 +370,21 @@ func WithHttpTools(cfg func() *http.Config, extraOptions ...http.Option) Option 
 						}
 
 						if conf.Session != nil && conf.Session.Enable {
-							store, err := http.NewTokenStore(
-								conf.Session.Store,
-								http.NewTokenContainer(conf.Session.Container),
-								http.NewTokenEncodeDecoder(conf.Session.Encoder),
-							)
-							if err != nil {
-								return err
-							}
-							sessionValidator := http.SessionValidator(http.NewTokenValidator(conf.Session.Validator))
-							sessionStore := http.SessionStore(store)
+							sessionService := http.NewSessionService(conf.Session)
 							middleware = append(
 								middleware,
-								http.MiddlewareSession(
-									conf.Session,
-									sessionStore,
-									sessionValidator,
-								),
+								http.MiddlewareSession(sessionService),
 							)
-							di.MustProvide(di.Default, func() http.SessionValidator { return sessionValidator })
-							di.MustProvide(di.Default, func() http.SessionStore { return sessionStore })
+							di.MustProvide(di.Default, func() *http.SessionService { return sessionService })
 						}
 
 						if conf.Csrf != nil && conf.Csrf.Enable {
-							csrf := http.NewCsrfGenerator(conf.Csrf)
+							csrf := http.NewCsrfTokenService(conf.Csrf)
 							middleware = append(
 								middleware,
-								http.MiddlewareCsrf(
-									conf.Csrf, csrf,
-									http.NewTokenValidator(conf.Csrf.Validator),
-								),
+								http.MiddlewareCsrf(csrf),
 							)
-							di.MustProvide(di.Default, func() *http.CsrfGenerator { return csrf })
+							di.MustProvide(di.Default, func() *http.CsrfTokenService { return csrf })
 
 							templateOptions = append(
 								templateOptions,
