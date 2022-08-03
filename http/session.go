@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/corpix/gdk/errors"
+	"github.com/corpix/gdk/log"
 )
 
 type (
@@ -107,8 +108,36 @@ func RequestSessionSet(r *Request, s *Session) *Request {
 
 //
 
-func NewSession(c *SessionConfig) *Session {
-	return NewToken(c.TokenConfig)
+func (srv *SessionService) Validate(t *Session) error {
+	if !*srv.Config.Validator.Enable {
+		return nil
+	}
+
+	err := srv.Validator.Validate(t)
+	if err != nil {
+		return log.NewEventDecoratorError(
+			errors.New("failed to validate session"),
+			map[string]interface{}{
+				"session": t,
+			},
+		)
+	}
+
+	return nil
+}
+
+func (srv *SessionService) Expiring(t *Session) bool {
+	return t.Header.ValidAfter.Add(*srv.Config.Refresh).Before(time.Now())
+}
+
+func (srv *SessionService) Refresh(t *Session) *Session {
+	tc := srv.New()
+	tc.Payload = t.Payload
+	return tc
+}
+
+func (srv *SessionService) New() *Session {
+	return NewSession(srv.Config)
 }
 
 func NewSessionService(c *SessionConfig) *SessionService {
@@ -128,6 +157,8 @@ func NewSessionService(c *SessionConfig) *SessionService {
 	return srv
 }
 
+//
+
 func MiddlewareSession(srv *SessionService) Middleware {
 	return func(h Handler) Handler {
 		return HandlerFunc(func(w ResponseWriter, r *Request) {
@@ -141,43 +172,33 @@ func MiddlewareSession(srv *SessionService) Middleware {
 
 			t, err := srv.Store.RequestLoad(r)
 			if err != nil {
-				t = NewSession(srv.Config)
+				t = srv.New()
+				flush = true
 				l.Warn().
 					Interface("session", t).
 					Err(err).
 					Msg("failed to load session, created new")
+			}
+
+			err = srv.Validate(t)
+			if err != nil {
+				t = srv.New()
 				flush = true
+				log.Decorate(l.Warn().Err(err), err).
+					Msg("invalid session, created new")
 			}
 
-			if *srv.Config.Validator.Enable {
-				err = srv.Validator.Validate(t)
-				if err != nil {
-					l.Warn().
-						Interface("session", t).
-						Err(err).
-						Msg("failed to validate session, creating new")
-					t = NewSession(srv.Config)
-					flush = true
-				}
-
-				if t.Header.ValidAfter.Add(*srv.Config.Refresh).Before(time.Now()) {
-					tc := NewSession(srv.Config)
-					tc.Payload = t.Payload
-					l.Trace().
-						Interface("expiring-session", t).
-						Interface("session", tc).
-						Msg("refreshing session")
-					t = tc
-					flush = true
-				}
+			if srv.Expiring(t) {
+				tc := srv.Refresh(t)
+				t = tc
+				flush = true
+				l.Trace().
+					Interface("expiring-session", t).
+					Interface("session", tc).
+					Msg("refreshed session")
 			}
-
-			//
 
 			r = RequestSessionSet(r, t)
-
-			//
-
 			nonce := t.nonce
 
 			h.ServeHTTP(w, r)
@@ -195,4 +216,8 @@ func MiddlewareSession(srv *SessionService) Middleware {
 			}
 		})
 	}
+}
+
+func NewSession(c *SessionConfig) *Session {
+	return NewToken(c.TokenConfig)
 }

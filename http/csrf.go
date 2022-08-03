@@ -128,29 +128,32 @@ func CsrfTokenNonceGet(t TokenMap) (uint, error) {
 	case int:
 		return uint(nonce), nil
 	default:
-		panic(errors.Errorf("unknown csrf token nonce type %T for value %+v", rawNonce, rawNonce))
+		return 0, errors.Errorf("unknown csrf token nonce type %T for value %+v", rawNonce, rawNonce)
 	}
 }
 
-func SessionTokenCsrfNonceGet(t TokenMap) (uint, error) {
+func SessionTokenCsrfNonceGet(t TokenMap) uint {
 	rawNonce, ok := t.Get(string(SessionPayloadKeyCsrfNonce))
 	if !ok {
-		return 0, errors.Errorf(
-			"failed to load %q from session token payload",
-			SessionPayloadKeyCsrfNonce,
-		)
+		sessionNonceBig, err := crypto.RandInt(big.NewInt(math.MaxInt))
+		if err != nil {
+			panic(err)
+		}
+		nonce := uint(sessionNonceBig.Uint64())
+		SessionTokenCsrfNonceSet(t, nonce)
+		return nonce
 	}
 	// NOTE: this is because different format parsers use different types
 	// when unmarshaling numbers into interface{}
 	switch nonce := rawNonce.(type) {
 	case float64:
-		return uint(nonce), nil
+		return uint(nonce)
 	case uint64:
-		return uint(nonce), nil
+		return uint(nonce)
 	case uint:
-		return nonce, nil
+		return nonce
 	case int:
-		return uint(nonce), nil
+		return uint(nonce)
 	default:
 		panic(errors.Errorf("unknown session csrf token nonce type %T for value %+v", rawNonce, rawNonce))
 	}
@@ -162,40 +165,41 @@ func SessionTokenCsrfNonceSet(t TokenMap, nonce uint) {
 
 //
 
-func (g *CsrfTokenService) Generate(sess *Session, path string) ([]byte, error) {
-	csrf := NewCsrf(g.Config)
+func (srv *CsrfTokenService) Generate(sess *Session, path string) ([]byte, error) {
+	nonce := SessionTokenCsrfNonceGet(sess)
+
+	csrf := NewCsrf(srv.Config)
 	csrf.Payload[string(CsrfPayloadKeyPath)] = path
-	nonce, _ := sess.Get(string(SessionPayloadKeyCsrfNonce))
 	csrf.Payload[string(CsrfPayloadKeyNonce)] = nonce
 
-	tokenBytes, err := g.Container.Encode(csrf)
+	tokenBytes, err := srv.Container.Encode(csrf)
 	if err != nil {
 		return nil, err
 	}
-	if g.EncodeDecoder != nil {
-		return g.EncodeDecoder.Encode(tokenBytes)
+	if srv.EncodeDecoder != nil {
+		return srv.EncodeDecoder.Encode(tokenBytes)
 	}
 	return tokenBytes, nil
 }
 
-func (g *CsrfTokenService) GenerateString(sess *Session, path string) (string, error) {
-	t, err := g.Generate(sess, path)
+func (srv *CsrfTokenService) GenerateString(sess *Session, path string) (string, error) {
+	t, err := srv.Generate(sess, path)
 	if err != nil {
 		return "", err
 	}
 	return string(t), nil
 }
 
-func (g *CsrfTokenService) MustGenerate(sess *Session, path string) []byte {
-	t, err := g.Generate(sess, path)
+func (srv *CsrfTokenService) MustGenerate(sess *Session, path string) []byte {
+	t, err := srv.Generate(sess, path)
 	if err != nil {
 		panic(err)
 	}
 	return t
 }
 
-func (g *CsrfTokenService) MustGenerateString(sess *Session, path string) string {
-	return string(g.MustGenerate(sess, path))
+func (srv *CsrfTokenService) MustGenerateString(sess *Session, path string) string {
+	return string(srv.MustGenerate(sess, path))
 }
 
 func NewCsrfTokenService(c *CsrfConfig) *CsrfTokenService {
@@ -207,6 +211,96 @@ func NewCsrfTokenService(c *CsrfConfig) *CsrfTokenService {
 	}
 }
 
+func (srv *CsrfTokenService) Validate(nonce uint, path string, token []byte) error {
+	if !*srv.Config.Validator.Enable {
+		return nil
+	}
+
+	if len(token) == 0 {
+		return errors.New("csrf token should not be empty")
+	}
+
+	var (
+		err error
+		t   *Token
+	)
+
+	if srv.EncodeDecoder != nil {
+		token, err = srv.EncodeDecoder.Decode(token)
+		if err != nil {
+			return log.NewEventDecoratorError(
+				errors.Wrap(err, "failed to decode csrf token"),
+				map[string]interface{}{
+					"token-bytes": token,
+				},
+			)
+		}
+	}
+	t, err = srv.Container.Decode(token)
+	if err != nil {
+		return log.NewEventDecoratorError(
+			errors.Wrap(err, "failed to decode csrf token container"),
+			map[string]interface{}{
+				"token-bytes": token,
+			},
+		)
+	}
+
+	err = srv.Validator.Validate(t)
+	if err != nil {
+		return log.NewEventDecoratorError(
+			errors.Wrap(err, "failed to validate token"),
+			map[string]interface{}{
+				"token": t,
+			},
+		)
+	}
+
+	//
+
+	tokenNonce, err := CsrfTokenNonceGet(t)
+	if err != nil {
+		return log.NewEventDecoratorError(
+			errors.Wrap(err, "failed to get nonce from csrf token"),
+			map[string]interface{}{
+				"token": t,
+			},
+		)
+	}
+	if tokenNonce != nonce {
+		return log.NewEventDecoratorError(
+			errors.New("csrf token nonce does not match the expected nonce"),
+			map[string]interface{}{
+				"token":          t,
+				"token-nonce":    tokenNonce,
+				"expected-nonce": nonce,
+			},
+		)
+	}
+
+	tokenPath, err := CsrfTokenPathGet(t)
+	if err != nil {
+		return log.NewEventDecoratorError(
+			errors.Wrap(err, "failed to get path from csrf token"),
+			map[string]interface{}{
+				"token": t,
+			},
+		)
+	}
+	if tokenPath != path {
+		return log.NewEventDecoratorError(
+			errors.New("csrf token path does not match the expected path"),
+			map[string]interface{}{
+				"token":         t,
+				"token-path":    tokenPath,
+				"expected-path": path,
+			},
+		)
+	}
+
+	return nil
+}
+
 //
 
 func NewCsrf(c *CsrfConfig) *Csrf {
@@ -214,47 +308,31 @@ func NewCsrf(c *CsrfConfig) *Csrf {
 }
 
 func MiddlewareCsrf(srv *CsrfTokenService) Middleware {
-	validationEnable := *srv.Config.Validator.Enable
 	granular := *srv.Config.Granular
 
 	return func(h Handler) Handler {
 		return HandlerFunc(func(w ResponseWriter, r *Request) {
 			var (
-				err             error
-				l               log.Logger
-				tokenBytes      []byte
-				token           *Csrf
-				path            string
-				nonce           uint
-				session         *Session
-				sessionNonceBig *big.Int
-				sessionNonce    uint
+				err          error
+				l            log.Logger
+				tokenBytes   []byte
+				session      *Session
+				sessionNonce uint
 			)
 
-			if Skip(srv.Config.SkipConfig, r) || !validationEnable {
+			if Skip(srv.Config.SkipConfig, r) {
 				goto next
 			}
-
-			l = RequestLogGet(r)
-
-			session = RequestSessionMustGet(r)
-			sessionNonce, err = SessionTokenCsrfNonceGet(session)
-
-			if err != nil {
-				l.Warn().Err(err).Msg("failed to get csrf nonce from session payload, generating new")
-				sessionNonceBig, err = crypto.RandInt(big.NewInt(math.MaxInt))
-				if err != nil {
-					l.Error().Err(err).Msg("failed to generate new csrf nonce")
-					goto fail
-				}
-				SessionTokenCsrfNonceSet(session, uint(sessionNonceBig.Uint64()))
-			}
-
 			if granular {
 				if _, ok := srv.Config.Methods[r.Method]; !ok {
 					goto next
 				}
 			}
+
+			l = RequestLogGet(r)
+
+			session = RequestSessionMustGet(r)
+			sessionNonce = SessionTokenCsrfNonceGet(session)
 
 			//
 
@@ -267,77 +345,13 @@ func MiddlewareCsrf(srv *CsrfTokenService) Middleware {
 				}
 				tokenBytes = []byte(r.Form.Get(srv.Config.Key))
 			}
-			if len(tokenBytes) == 0 {
-				l.Warn().Msg("no csrf token in query")
-				goto fail
-			}
 
-			if srv.EncodeDecoder != nil {
-				tokenBytes, err = srv.EncodeDecoder.Decode(tokenBytes)
-				if err != nil {
-					l.Warn().
-						Bytes("token", tokenBytes).
-						Err(err).
-						Msg("failed decode csrf token")
-					goto fail
-				}
-			}
-			token, err = srv.Container.Decode(tokenBytes)
+			err = srv.Validate(sessionNonce, r.URL.Path, tokenBytes)
 			if err != nil {
-				l.Warn().
-					Bytes("token", tokenBytes).
-					Err(err).
-					Msg("failed decode csrf token container")
+				log.Decorate(l.Warn().Err(err), err).
+					Msg("csrf token validation failed")
 				goto fail
 			}
-
-			err = srv.Validator.Validate(token)
-			if err != nil {
-				l.Warn().
-					Interface("token", token).
-					Err(err).
-					Msg("failed to validate csrf")
-				goto fail
-			}
-
-			//
-
-			path, err = CsrfTokenPathGet(token)
-			if err != nil {
-				l.Warn().
-					Interface("token", token).
-					Err(err).
-					Msg("failed to get csrf payload key")
-				goto fail
-			}
-			nonce, err = CsrfTokenNonceGet(token)
-			if err != nil {
-				l.Warn().
-					Interface("token", token).
-					Err(err).
-					Msg("failed to get csrf payload key")
-				goto fail
-			}
-
-			//
-
-			if nonce != sessionNonce {
-				l.Warn().
-					Interface("token", token).
-					Uint("nonce", nonce).
-					Uint("session-nonce", sessionNonce).
-					Msg("csrf token nonce does not match csrf nonce stored inside session")
-				goto fail
-			}
-			if path != r.URL.Path {
-				l.Warn().
-					Interface("token", token).
-					Str("path", path).
-					Str("url-path", r.URL.Path).
-					Msg("csrf token path does not match path from request")
-				goto fail
-			}
-
 		next:
 			h.ServeHTTP(w, r)
 			return
