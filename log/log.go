@@ -13,11 +13,21 @@ import (
 )
 
 type (
-	Level   = zerolog.Level
-	Logger  = zerolog.Logger
-	Option  func(*Logger)
-	Event   = zerolog.Event
-	Context = zerolog.Context
+	Level    = zerolog.Level
+	Logger   = zerolog.Logger
+	Option   func(*Logger)
+	Context  = zerolog.Context
+	Hook     = zerolog.Hook
+	HookFunc = zerolog.HookFunc
+
+	Event          = zerolog.Event
+	EventDecorator interface {
+		DecorateEvent(e *Event)
+	}
+	EventDecoratorError struct {
+		Err  error
+		Meta map[string]interface{}
+	}
 )
 
 const (
@@ -29,6 +39,18 @@ const (
 	LevelPanic = zerolog.PanicLevel
 	LevelFatal = zerolog.FatalLevel
 )
+
+type Config struct {
+	Level string `yaml:"level"`
+}
+
+func (c *Config) Default() {
+	if c.Level == "" {
+		c.Level = LevelInfo.String()
+	}
+}
+
+//
 
 var Default Logger
 
@@ -47,6 +69,8 @@ func Warn() *Event                                 { return Default.Warn() }
 func WithLevel(level Level) *Event                 { return Default.WithLevel(level) }
 func With() Context                                { return Default.With() }
 
+//
+
 func WithProvide(cont *di.Container) Option {
 	return func(l *Logger) {
 		di.MustProvide(cont, func() *Logger { return l })
@@ -57,16 +81,34 @@ func WithInvoke(cont *di.Container, f di.Function) Option {
 	return func(l *Logger) { di.MustInvoke(cont, f) }
 }
 
-//
-
-type Config struct {
-	Level string `yaml:"level"`
+func WithHook(h Hook) Option {
+	return func(l *Logger) {
+		l.Hook(h)
+	}
 }
 
-func (c *Config) Default() {
-	if c.Level == "" {
-		c.Level = LevelInfo.String()
+//
+
+func (e *EventDecoratorError) Error() string { return e.Err.Error() }
+func (e *EventDecoratorError) DecorateEvent(evt *Event) {
+	for k, v := range e.Meta {
+		evt.Interface(k, v)
 	}
+}
+
+func NewEventDecoratorError(err error, meta map[string]interface{}) *EventDecoratorError {
+	return &EventDecoratorError{
+		Err:  err,
+		Meta: meta,
+	}
+}
+
+func Decorate(e *Event, v interface{}) *Event {
+	switch ec := v.(type) {
+	case EventDecorator:
+		ec.DecorateEvent(e)
+	}
+	return e
 }
 
 //
