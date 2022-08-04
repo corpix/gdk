@@ -5,6 +5,8 @@ http:
     token: insecure
   session:
     enable: true
+    store:
+      type: redis
     container:
       ## secretbox is default
       # type: jwt

@@ -30,6 +30,7 @@ require (
 	github.com/cockroachdb/redact v1.1.3 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/getsentry/sentry-go v0.12.0 // indirect
+	github.com/go-redis/redis v6.15.6+incompatible // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/huandu/xstrings v1.3.1 // indirect
@@ -43,6 +44,10 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.0 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
+	github.com/philippgille/gokv v0.6.0 // indirect
+	github.com/philippgille/gokv/encoding v0.0.0-20191011213304-eb77f15b9c61 // indirect
+	github.com/philippgille/gokv/redis v0.6.0 // indirect
+	github.com/philippgille/gokv/util v0.0.0-20191011213304-eb77f15b9c61 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect

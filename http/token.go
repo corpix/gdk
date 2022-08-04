@@ -16,11 +16,14 @@ import (
 	"time"
 
 	jwt "github.com/cristalhq/jwt/v4"
+	"github.com/google/uuid"
+	"github.com/philippgille/gokv/redis"
 	msgpack "github.com/vmihailenco/msgpack/v5"
 
 	"github.com/corpix/gdk/crypto"
 	"github.com/corpix/gdk/encoding"
 	"github.com/corpix/gdk/errors"
+	"github.com/corpix/gdk/kv"
 )
 
 type (
@@ -39,8 +42,9 @@ type (
 		ValidAfter  time.Time `json:"valid-after"`
 		ValidBefore time.Time `json:"valid-before"`
 	}
-	TokenPayload map[string]interface{}
-	TokenMap     interface {
+	TokenPayload    map[string]interface{}
+	TokenPayloadKey string
+	TokenMap        interface {
 		Get(key string) (interface{}, bool)
 		Set(key string, value interface{})
 		Del(key string)
@@ -53,9 +57,12 @@ type (
 	TokenJwtAlgorithm = jwt.Algorithm
 	TokenJwtHeader    = jwt.Header
 
+	//
+
 	TokenStoreConfig struct {
 		Type   string                  `yaml:"type"`
 		Cookie *TokenStoreCookieConfig `yaml:"cookie"`
+		Redis  *TokenStoreRedisConfig  `yamnl:"redis"`
 	}
 	TokenStoreType string
 	TokenStore     interface {
@@ -67,6 +74,7 @@ type (
 		Drop([]byte) error
 		RequestDrop(ResponseWriter, *Request) error
 	}
+
 	TokenStoreCookieConfig struct {
 		Name     string         `yaml:"name"`
 		Path     string         `yaml:"path"`
@@ -81,6 +89,24 @@ type (
 		Container     TokenContainer
 		EncodeDecoder TokenEncodeDecoder
 	}
+
+	TokenStoreRedisConfig struct {
+		Address      string                  `yaml:"address"`
+		Password     string                  `yaml:"password"`
+		PasswordFile string                  `yaml:"password-file"`
+		Db           int                     `yaml:"db"`
+		Cookie       *TokenStoreCookieConfig `yaml:"cookie"` // NOTE: we store id in cookie
+
+		password string
+	}
+	TokenStoreRedis struct {
+		Config        *TokenStoreRedisConfig
+		Container     TokenContainer
+		EncodeDecoder TokenEncodeDecoder
+		Store         kv.Store
+	}
+
+	//
 
 	TokenContainerConfig struct {
 		Type      string                         `yaml:"type"`
@@ -149,7 +175,10 @@ type (
 )
 
 const (
+	TokenPayloadKeyId TokenPayloadKey = "id"
+
 	TokenStoreTypeCookie TokenStoreType = "cookie"
+	TokenStoreTypeRedis  TokenStoreType = "redis"
 
 	TokenEncodeDecoderTypeRaw    TokenEncodeDecoderType = "raw"
 	TokenEncodeDecoderTypeBase64 TokenEncodeDecoderType = "base64"
@@ -200,6 +229,7 @@ var (
 	TokenJwtErrInvalidSignature  = jwt.ErrInvalidSignature
 
 	_ TokenStore = new(TokenStoreCookie)
+	_ TokenStore = new(TokenStoreRedis)
 
 	_ TokenContainer = new(TokenContainerJson)
 	_ TokenContainer = new(TokenContainerJwt)
@@ -488,6 +518,9 @@ func (c *TokenStoreConfig) Default() {
 	if c.Type == string(TokenStoreTypeCookie) && c.Cookie == nil {
 		c.Cookie = &TokenStoreCookieConfig{}
 	}
+	if c.Type == string(TokenStoreTypeRedis) && c.Redis == nil {
+		c.Redis = &TokenStoreRedisConfig{}
+	}
 }
 
 func (c *TokenStoreCookieConfig) Default() {
@@ -532,15 +565,20 @@ func (c *TokenStoreCookieConfig) Validate() error {
 	return nil
 }
 
-func (s *TokenStoreCookie) cookie() *Cookie {
-	return &Cookie{
-		Name:     s.Config.Name,
-		Path:     s.Config.Path,
-		Domain:   s.Config.Domain,
-		Secure:   *s.Config.Secure,
-		HttpOnly: *s.Config.HttpOnly,
-		SameSite: CookieSameSiteModes[strings.ToLower(s.Config.SameSite)],
+func (c *TokenStoreCookieConfig) Cookie() *Cookie {
+	cookie := &Cookie{
+		Name:     c.Name,
+		Path:     c.Path,
+		Domain:   c.Domain,
+		Secure:   *c.Secure,
+		HttpOnly: *c.HttpOnly,
+		SameSite: CookieSameSiteModes[strings.ToLower(c.SameSite)],
 	}
+	if c.MaxAge != nil {
+		cookie.MaxAge = int(*c.MaxAge / time.Second)
+		cookie.Expires = time.Now().Add(*c.MaxAge)
+	}
+	return cookie
 }
 
 func (s *TokenStoreCookie) Id(r *Request) ([]byte, error) {
@@ -572,13 +610,8 @@ func (s *TokenStoreCookie) RequestSave(w ResponseWriter, r *Request, t *Token) (
 		return nil, err
 	}
 
-	cookie := s.cookie()
+	cookie := s.Config.Cookie()
 	cookie.Value = string(id)
-	if s.Config.MaxAge != nil {
-		cookie.MaxAge = int(*s.Config.MaxAge / time.Second)
-		cookie.Expires = time.Now().Add(*s.Config.MaxAge)
-	}
-
 	CookieSet(w, cookie)
 	return id, nil
 }
@@ -618,7 +651,7 @@ func (s *TokenStoreCookie) Drop(id []byte) error {
 }
 
 func (s *TokenStoreCookie) RequestDrop(w ResponseWriter, r *Request) error {
-	cookie := s.cookie()
+	cookie := s.Config.Cookie()
 	cookie.Expires = time.Time{} // 0001-01-01 00:00:00 +0000 UTC
 
 	CookieSet(w, cookie)
@@ -635,10 +668,171 @@ func NewTokenStoreCookie(c *TokenStoreCookieConfig, cont TokenContainer, enc Tok
 
 //
 
+func (c *TokenStoreRedisConfig) Default() {
+	if c.Address == "" {
+		c.Address = "127.0.0.1:6379"
+	}
+	if c.Cookie == nil {
+		c.Cookie = &TokenStoreCookieConfig{}
+	}
+}
+
+func (c *TokenStoreRedisConfig) Validate() error {
+	if c.Password != "" && c.PasswordFile != "" {
+		return errors.New("either password or password-file should be specified, not both")
+	}
+
+	return nil
+}
+
+func (c *TokenStoreRedisConfig) Expand() error {
+	if c.PasswordFile != "" {
+		passwordBytes, err := ioutil.ReadFile(c.PasswordFile)
+		if err != nil {
+			return err
+		}
+		c.password = string(passwordBytes)
+	} else {
+		c.password = c.Password
+	}
+	return nil
+}
+
+func (s *TokenStoreRedis) Id(r *Request) ([]byte, error) {
+	cookie, err := CookieGet(r, s.Config.Cookie.Name)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get cookie from request")
+	}
+	return []byte(cookie.Value), nil
+}
+
+func (s *TokenStoreRedis) Save(t *Token) ([]byte, error) {
+	var id string
+	rawId, ok := t.Get(string(TokenPayloadKeyId))
+	if ok {
+		id = rawId.(string)
+	} else {
+		id = uuid.NewString()
+		t.Set(string(TokenPayloadKeyId), id)
+	}
+
+	buf, err := s.Container.Encode(t)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to encode token container")
+	}
+	if s.EncodeDecoder != nil {
+		buf, err = s.EncodeDecoder.Encode(buf)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to encode token value")
+		}
+	}
+
+	err = s.Store.Set(id, buf)
+	if err != nil {
+		return nil, err
+	}
+
+	return []byte(id), nil
+}
+
+func (s *TokenStoreRedis) RequestSave(w ResponseWriter, r *Request, t *Token) ([]byte, error) {
+	id, err := s.Save(t)
+	if err != nil {
+		return nil, err
+	}
+
+	cookie := s.Config.Cookie.Cookie()
+	cookie.Value = string(id)
+	CookieSet(w, cookie)
+
+	return id, nil
+}
+
+func (s *TokenStoreRedis) Load(id []byte) (*Token, error) {
+	var (
+		buf []byte
+		err error
+	)
+
+	ok, err := s.Store.Get(string(id), &buf)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, errors.Errorf("no key with id %q", string(id))
+	}
+
+	if s.EncodeDecoder != nil {
+		buf, err = s.EncodeDecoder.Decode(buf)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to decode token value")
+		}
+	}
+	t, err := s.Container.Decode(buf)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to decode token container")
+	}
+
+	return t, nil
+}
+
+func (s *TokenStoreRedis) RequestLoad(r *Request) (*Token, error) {
+	id, err := s.Id(r)
+	if err != nil {
+		return nil, err
+	}
+	t, err := s.Load(id)
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+func (s *TokenStoreRedis) Drop(id []byte) error {
+	return s.Store.Delete(string(id))
+}
+
+func (s *TokenStoreRedis) RequestDrop(w ResponseWriter, r *Request) error {
+	id, err := s.Id(r)
+	if err != nil {
+		return err
+	}
+
+	cookie := s.Config.Cookie.Cookie()
+	cookie.MaxAge = 0
+	cookie.Expires = time.Time{} // 0001-01-01 00:00:00 +0000 UTC
+	CookieSet(w, cookie)
+
+	return s.Drop(id)
+}
+
+func NewTokenStoreRedis(c *TokenStoreRedisConfig, cont TokenContainer, enc TokenEncodeDecoder) *TokenStoreRedis {
+	options := redis.Options{
+		Address:  c.Address,
+		Password: c.password,
+		DB:       c.Db,
+	}
+	s, err := redis.NewClient(options)
+	if err != nil {
+		panic(err)
+	}
+
+	return &TokenStoreRedis{
+		Config:        c,
+		Container:     cont,
+		EncodeDecoder: enc,
+		Store:         s,
+	}
+}
+
+//
+
 func NewTokenStore(c *TokenStoreConfig, cont TokenContainer, enc TokenEncodeDecoder) (TokenStore, error) {
 	switch strings.ToLower(c.Type) {
 	case string(TokenStoreTypeCookie):
 		return NewTokenStoreCookie(c.Cookie, cont, enc), nil
+	case string(TokenStoreTypeRedis):
+		return NewTokenStoreRedis(c.Redis, cont, enc), nil
 	default:
 		return nil, errors.Errorf("unsupported store type: %q", c.Type)
 	}
