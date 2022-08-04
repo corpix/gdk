@@ -12,6 +12,8 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.0
 	github.com/mattn/go-isatty v0.0.14
+	github.com/philippgille/gokv v0.6.0
+	github.com/philippgille/gokv/redis v0.6.0
 	github.com/prometheus/client_golang v1.12.2
 	github.com/rs/zerolog v1.27.0
 	github.com/stretchr/testify v1.7.1
@@ -44,9 +46,7 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.0 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
-	github.com/philippgille/gokv v0.6.0 // indirect
 	github.com/philippgille/gokv/encoding v0.0.0-20191011213304-eb77f15b9c61 // indirect
-	github.com/philippgille/gokv/redis v0.6.0 // indirect
 	github.com/philippgille/gokv/util v0.0.0-20191011213304-eb77f15b9c61 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
