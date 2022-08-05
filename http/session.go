@@ -199,11 +199,11 @@ func MiddlewareSession(srv *SessionService) Middleware {
 			}
 
 			r = RequestSessionSet(r, t)
-			nonce := t.nonce
+			seqno := t.seqno
 
 			h.ServeHTTP(w, r)
 
-			if flush || t.nonce > nonce {
+			if flush || t.seqno > seqno {
 				_, err = srv.Store.RequestSave(w, r, t)
 				if err != nil {
 					l.Warn().

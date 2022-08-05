@@ -34,7 +34,7 @@ type (
 		Validator *TokenValidatorConfig `yaml:"validator"`
 	}
 	Token struct {
-		nonce   uint
+		seqno   uint
 		Header  TokenHeader  `json:"header"`
 		Payload TokenPayload `json:"payload"`
 	}
@@ -465,7 +465,7 @@ func (c *TokenContainerSecretBoxConfig) Expand() error {
 
 //
 
-func (s *Token) Nonce() uint { return s.nonce }
+func (s *Token) Seqno() uint { return s.seqno }
 
 func (s *Token) Get(key string) (interface{}, bool) {
 	v, ok := s.Payload[key]
@@ -474,14 +474,14 @@ func (s *Token) Get(key string) (interface{}, bool) {
 
 func (s *Token) Set(key string, value interface{}) {
 	s.Payload[key] = value
-	s.nonce++
+	s.seqno++
 }
 
 func (s *Token) Del(key string) {
 	_, ok := s.Payload[key]
 	if ok {
 		delete(s.Payload, key)
-		s.nonce++
+		s.seqno++
 	}
 }
 
@@ -490,7 +490,7 @@ func (s *Token) Del(key string) {
 func NewToken(c *TokenConfig) *Token {
 	now := time.Now()
 	return &Token{
-		nonce: 0,
+		seqno: 0,
 		Header: TokenHeader{
 			ValidAfter:  now,
 			ValidBefore: now.Add(*c.Validator.Expire.MaxAge),
