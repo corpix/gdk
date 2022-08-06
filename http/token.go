@@ -480,16 +480,48 @@ func (s *Token) MustGet(key string) interface{} {
 	return v
 }
 
+func (s *Token) GetBool(key string) (bool, bool) {
+	v, ok := s.Payload[key]
+	if ok {
+		return v.(bool), ok
+	}
+	return false, false
+}
+
 func (s *Token) MustGetBool(key string) bool {
 	return s.MustGet(key).(bool)
+}
+
+func (s *Token) GetInt(key string) (int, bool) {
+	v, ok := s.Payload[key]
+	if ok {
+		return v.(int), ok
+	}
+	return 0, false
 }
 
 func (s *Token) MustGetInt(key string) int {
 	return s.MustGet(key).(int)
 }
 
+func (s *Token) GetUint(key string) (uint, bool) {
+	v, ok := s.Payload[key]
+	if ok {
+		return v.(uint), ok
+	}
+	return 0, false
+}
+
 func (s *Token) MustGetUint(key string) uint {
 	return s.MustGet(key).(uint)
+}
+
+func (s *Token) GetString(key string) (string, bool) {
+	v, ok := s.Payload[key]
+	if ok {
+		return v.(string), ok
+	}
+	return "", false
 }
 
 func (s *Token) MustGetString(key string) string {
