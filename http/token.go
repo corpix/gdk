@@ -472,6 +472,30 @@ func (s *Token) Get(key string) (interface{}, bool) {
 	return v, ok
 }
 
+func (s *Token) MustGet(key string) interface{} {
+	v, ok := s.Get(key)
+	if !ok {
+		panic(errors.Errorf("no key %q found", key))
+	}
+	return v
+}
+
+func (s *Token) MustGetBool(key string) bool {
+	return s.MustGet(key).(bool)
+}
+
+func (s *Token) MustGetInt(key string) int {
+	return s.MustGet(key).(int)
+}
+
+func (s *Token) MustGetUint(key string) uint {
+	return s.MustGet(key).(uint)
+}
+
+func (s *Token) MustGetString(key string) string {
+	return s.MustGet(key).(string)
+}
+
 func (s *Token) Set(key string, value interface{}) {
 	s.Payload[key] = value
 	s.seqno++
