@@ -30,6 +30,7 @@ type (
 		Header  TokenHeader  `json:"header"`
 		Payload TokenPayload `json:"payload"`
 	}
+	TokenCap    uint8
 	TokenHeader struct {
 		ValidAfter  time.Time `json:"valid-after"`
 		ValidBefore time.Time `json:"valid-before"`
@@ -78,6 +79,7 @@ type (
 	TokenContainer interface {
 		Encode(*Token) ([]byte, error)
 		Decode([]byte) (*Token, error)
+		Cap() TokenCap
 	}
 	TokenContainerJson struct {
 		Config *TokenContainerJsonConfig
@@ -115,6 +117,13 @@ type (
 	TokenValidatorExpire struct {
 		Config *TokenValidatorExpireConfig
 	}
+)
+
+const (
+	TokenCapAuthenticated TokenCap = 1 << iota
+	TokenCapEncrypted
+	TokenCapSharedSecret
+	TokenCapPubKeyCrypto
 )
 
 const (
@@ -197,6 +206,21 @@ func (c *TokenConfig) Validate() error {
 		return errors.Errorf("unsupported encode decoder %q", c.Encoder)
 	}
 	return nil
+}
+
+//
+
+func (b TokenCap) Set(flag TokenCap) TokenCap    { return b | flag }
+func (b TokenCap) Clear(flag TokenCap) TokenCap  { return b &^ flag }
+func (b TokenCap) Toggle(flag TokenCap) TokenCap { return b ^ flag }
+func (b TokenCap) Has(flag TokenCap) bool        { return b&flag != 0 }
+
+func NewTokenCap(flag ...TokenCap) TokenCap {
+	var b TokenCap
+	for _, f := range flag {
+		b = b.Set(f)
+	}
+	return b
 }
 
 //
@@ -503,6 +527,8 @@ func (c *TokenContainerJson) Decode(buf []byte) (*Token, error) {
 	}
 	return s, nil
 }
+func (c *TokenContainerJson) Cap() (tc TokenCap) { return tc }
+
 func NewTokenContainerJson(c *TokenContainerJsonConfig) *TokenContainerJson {
 	return &TokenContainerJson{
 		Config: c,
@@ -540,6 +566,17 @@ func (c *TokenContainerJwt) Decode(buf []byte) (*Token, error) {
 	s.Payload = j.Payload
 	return s, nil
 }
+func (c *TokenContainerJwt) Cap() (tc TokenCap) {
+	tc = tc.Set(TokenCapAuthenticated)
+	switch TokenJwtAlgorithms[strings.ToLower(c.Config.Algorithm)] {
+	case TokenJwtAlgorithmHS256, TokenJwtAlgorithmHS384, TokenJwtAlgorithmHS512:
+		tc = tc.Set(TokenCapSharedSecret)
+	default:
+		tc = tc.Set(TokenCapPubKeyCrypto)
+	}
+	return tc
+}
+
 func NewTokenContainerJwt(c *TokenContainerJwtConfig) *TokenContainerJwt {
 	var (
 		s   jwt.Signer
@@ -663,6 +700,8 @@ func (c *TokenContainerMsgpack) Decode(buf []byte) (*Token, error) {
 	}
 	return s, nil
 }
+func (c *TokenContainerMsgpack) Cap() (tc TokenCap) { return tc }
+
 func NewTokenContainerMsgpack(c *TokenContainerMsgpackConfig) *TokenContainerMsgpack {
 	return &TokenContainerMsgpack{
 		Config: c,
@@ -691,6 +730,13 @@ func (c *TokenContainerSecretBox) Decode(buf []byte) (*Token, error) {
 
 	return c.Container.Decode(buf)
 }
+func (c *TokenContainerSecretBox) Cap() (tc TokenCap) {
+	tc = tc.Set(TokenCapAuthenticated)
+	tc = tc.Set(TokenCapEncrypted)
+	tc = tc.Set(TokenCapSharedSecret)
+	return tc
+}
+
 func NewTokenContainerSecretBox(c *TokenContainerSecretBoxConfig) *TokenContainerSecretBox {
 	return &TokenContainerSecretBox{
 		Config:    c,
