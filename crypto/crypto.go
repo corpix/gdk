@@ -1,12 +1,16 @@
 package crypto
 
 import (
+	"crypto"
 	"crypto/rand"
 	"io"
 	"math/big"
 )
 
-type Rand io.Reader
+type (
+	Rand      io.Reader
+	PublicKey = crypto.PublicKey
+)
 
 var DefaultRand = Rand(rand.Reader)
 

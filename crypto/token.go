@@ -6,9 +6,12 @@ import (
 	"crypto/ed25519"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"io/ioutil"
+	"math/big"
 	"strings"
 	"time"
 
@@ -17,6 +20,7 @@ import (
 
 	"github.com/corpix/gdk/encoding"
 	"github.com/corpix/gdk/errors"
+	"github.com/corpix/gdk/reflect"
 )
 
 type (
@@ -49,6 +53,28 @@ type (
 	}
 	TokenJwtAlgorithm = jwt.Algorithm
 	TokenJwtHeader    = jwt.Header
+
+	// see https://www.rfc-editor.org/rfc/rfc7517#page-5
+	TokenJwtKey struct {
+		Name       string            `json:"kid,omitempty"`
+		Type       TokenJwtKeyType   `json:"kty"`
+		Use        string            `json:"use,omitempty"`
+		Operations []string          `json:"key_ops,omitempty"`
+		Algorithm  TokenJwtAlgorithm `json:"alg,omitempty"`
+
+		// RSA
+		Exponent string `json:"e,omitempty"`
+		Modulus  string `json:"n,omitempty"`
+
+		// EC
+		Curve    string `json:"crv,omitempty"`
+		Abscissa string `json:"x,omitempty"`
+		Ordinate string `json:"y,omitempty"`
+	}
+	TokenJwtKeyType string
+	TokenJwtKeySet  struct {
+		Keys []TokenJwtKey `json:"keys"`
+	}
 
 	//
 
@@ -88,6 +114,7 @@ type (
 		Config   *TokenContainerJwtConfig
 		Builder  *jwt.Builder
 		Verifier jwt.Verifier
+		Key      *TokenJwtKey
 	}
 	TokenContainerMsgpack struct {
 		Config *TokenContainerMsgpackConfig
@@ -136,6 +163,9 @@ const (
 	TokenContainerTypeJwt       TokenContainerType = "jwt"
 	TokenContainerTypeMsgpack   TokenContainerType = "msgpack"
 	TokenContainerTypeSecretBox TokenContainerType = "secretbox"
+
+	TokenJwtKeyTypeRSA TokenJwtKeyType = "RSA"
+	TokenJwtKeyTypeEC  TokenJwtKeyType = "EC"
 
 	TokenJwtAlgorithmEdDSA TokenJwtAlgorithm = jwt.EdDSA
 	TokenJwtAlgorithmHS256 TokenJwtAlgorithm = jwt.HS256
@@ -516,6 +546,80 @@ func NewToken(c *TokenConfig) *Token {
 
 //
 
+// JWK RFC requires lexicographical ordering of keys on JSON
+// so stable checksums could be calculated
+// https://www.rfc-editor.org/rfc/rfc7638#section-3.3
+// we utilize the thing in encoding/json which marshals map's
+// keys in lexicographical order
+// (structs fields marshaled in order declared in it's type)
+func (k *TokenJwtKey) MarshalJSON() ([]byte, error) {
+	rv := reflect.IndirectValue(reflect.ValueOf(k))
+	rt := rv.Type()
+	m := map[string]interface{}{}
+
+loop:
+	for n := 0; n < rt.NumField(); n++ {
+		tag := strings.Split(rt.Field(n).Tag.Get("json"), ",")
+		name := tag[0]
+		value := rv.Field(n).Interface()
+		if len(tag) > 1 && tag[1] == "omitempty" {
+			switch v := value.(type) {
+			case string:
+				if len(v) == 0 {
+					continue loop
+				}
+			case []string:
+				if len(v) == 0 {
+					continue loop
+				}
+			}
+		}
+		m[name] = value
+	}
+	return json.Marshal(m)
+}
+
+func NewTokenJwtKey(pub PublicKey) *TokenJwtKey {
+	// see https://tools.ietf.org/html/rfc7518#section-6.2.1
+	// see https://tools.ietf.org/html/rfc7518#section-6.3.1
+	// see https://tools.ietf.org/html/rfc7638#section-3.3
+	switch pub := pub.(type) {
+	case *ecdsa.PublicKey:
+		p := pub.Curve.Params()
+		n := p.BitSize / 8
+		if p.BitSize%8 != 0 {
+			n++
+		}
+		x := pub.X.Bytes()
+		if n > len(x) {
+			x = append(make([]byte, n-len(x)), x...)
+		}
+		y := pub.Y.Bytes()
+		if n > len(y) {
+			y = append(make([]byte, n-len(y)), y...)
+		}
+		return &TokenJwtKey{
+			Type:     TokenJwtKeyTypeEC,
+			Curve:    p.Name,
+			Abscissa: base64.RawURLEncoding.EncodeToString(x),
+			Ordinate: base64.RawURLEncoding.EncodeToString(y),
+		}
+	case *rsa.PublicKey:
+		n := pub.N
+		e := big.NewInt(int64(pub.E))
+
+		return &TokenJwtKey{
+			Type:     TokenJwtKeyTypeRSA,
+			Exponent: base64.RawURLEncoding.EncodeToString(e.Bytes()),
+			Modulus:  base64.RawURLEncoding.EncodeToString(n.Bytes()),
+		}
+	default:
+		panic(fmt.Sprintf("unsupported key type %T", pub))
+	}
+}
+
+//
+
 func (c *TokenContainerJson) Encode(s *Token) ([]byte, error) {
 	return json.Marshal(s)
 }
@@ -581,6 +685,7 @@ func NewTokenContainerJwt(c *TokenContainerJwtConfig) *TokenContainerJwt {
 	var (
 		s   jwt.Signer
 		v   jwt.Verifier
+		k   TokenJwtKey
 		err error
 	)
 
@@ -603,6 +708,7 @@ func NewTokenContainerJwt(c *TokenContainerJwtConfig) *TokenContainerJwt {
 			panic(err)
 		}
 		ecdsaPublicKey := ecdsaPrivateKey.Public().(*ecdsa.PublicKey)
+		k = *NewTokenJwtKey(ecdsaPublicKey)
 
 		s, err = jwt.NewSignerES(algo, ecdsaPrivateKey)
 		if err != nil {
@@ -624,6 +730,7 @@ func NewTokenContainerJwt(c *TokenContainerJwtConfig) *TokenContainerJwt {
 			panic(errors.Errorf("private key is not *rsa.PrivateKey, it is %T", privateKey))
 		}
 		rsaPublicKey := rsaPrivateKey.Public().(*rsa.PublicKey)
+		k = *NewTokenJwtKey(rsaPublicKey)
 
 		s, err = jwt.NewSignerPS(algo, rsaPrivateKey)
 		if err != nil {
@@ -645,6 +752,7 @@ func NewTokenContainerJwt(c *TokenContainerJwtConfig) *TokenContainerJwt {
 			panic(errors.Errorf("private key is not *rsa.PrivateKey, it is %T", privateKey))
 		}
 		rsaPublicKey := rsaPrivateKey.Public().(*rsa.PublicKey)
+		k = *NewTokenJwtKey(rsaPublicKey)
 
 		s, err = jwt.NewSignerRS(algo, rsaPrivateKey)
 		if err != nil {
@@ -666,6 +774,7 @@ func NewTokenContainerJwt(c *TokenContainerJwtConfig) *TokenContainerJwt {
 			panic(errors.Errorf("private key is not ed25519.PrivateKey, it is %T", privateKey))
 		}
 		ed25519PublicKey := ed25519PrivateKey.Public().(ed25519.PublicKey)
+		k = *NewTokenJwtKey(ed25519PublicKey)
 
 		s, err = jwt.NewSignerEdDSA(ed25519PrivateKey)
 		if err != nil {
@@ -680,10 +789,12 @@ func NewTokenContainerJwt(c *TokenContainerJwtConfig) *TokenContainerJwt {
 		panic(errors.Errorf("unsupported JWT marshaling algorithm %q", c.Algorithm))
 	}
 
+	k.Algorithm = algo
 	return &TokenContainerJwt{
 		Config:   c,
 		Builder:  jwt.NewBuilder(s),
 		Verifier: v,
+		Key:      &k,
 	}
 }
 
