@@ -73,7 +73,7 @@ type (
 	}
 	TokenJwtKeyType string
 	TokenJwtKeySet  struct {
-		Keys []TokenJwtKey `json:"keys"`
+		Keys []*TokenJwtKey `json:"keys"`
 	}
 
 	//
