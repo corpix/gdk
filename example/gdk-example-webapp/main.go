@@ -79,7 +79,7 @@ func main() {
 			conf.HttpConfig,
 			http.WithInvoke(
 				di.Default,
-				func(h *http.Http, t *template.Template) {
+				func(h *http.Http, t *template.Template, csrf *http.CsrfTokenService, session *http.SessionService) {
 					h.Router.
 						HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 							w.Header().Add(http.HeaderContentType, http.MimeTextHtml)
@@ -108,6 +108,27 @@ func main() {
 							w.Write([]byte(greet.(string)))
 						}).
 						Methods(http.MethodPost)
+
+					//
+
+					h.Router.
+						HandleFunc("/no-csrf", func(w http.ResponseWriter, r *http.Request) {
+							t := http.RequestSessionGet(conf.Http.Session, r)
+							greet, ok := t.Get("greet")
+							if !ok {
+								greet = time.Now().String()
+								t.Set("greet", greet)
+							}
+							w.Write([]byte(greet.(string)))
+						}).
+						Name("no-csrf").
+						Methods(http.MethodPost)
+
+					noCsrfPath := http.RoutePathTemplate(h.Router, "no-csrf")
+					csrf.SkipPaths(noCsrfPath)
+					session.SkipPaths(noCsrfPath)
+
+					//
 
 					h.Router.
 						HandleFunc("/panic", func(w http.ResponseWriter, r *http.Request) {

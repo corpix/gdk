@@ -108,6 +108,12 @@ func RequestSessionSet(r *Request, s *Session) *Request {
 
 //
 
+func (srv *SessionService) SkipPaths(paths ...string) {
+	for _, path := range paths {
+		srv.Config.SkipPaths[path] = struct{}{}
+	}
+}
+
 func (srv *SessionService) Validate(t *Session) error {
 	if !*srv.Config.Validator.Enable {
 		return nil

@@ -165,6 +165,12 @@ func SessionTokenCsrfNonceSet(t TokenMap, nonce uint) {
 
 //
 
+func (srv *CsrfTokenService) SkipPaths(paths ...string) {
+	for _, path := range paths {
+		srv.Config.SkipPaths[path] = struct{}{}
+	}
+}
+
 func (srv *CsrfTokenService) Generate(sess *Session, path string) ([]byte, error) {
 	nonce := SessionTokenCsrfNonceGet(sess)
 
