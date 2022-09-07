@@ -1,6 +1,8 @@
 <form method="post">
-  <input type="hidden" name="_csrf" value="{{ csrf .session "/" }}"/>
+  <input type="hidden" name="_csrf" value="{{csrf .session "/"}}"/>
   <button type="submit">send</button>
 </form>
+
+<img src="{{qr "hello world" 250}}"/>
 
 <pre>{{dump .request.URL}}</pre>

@@ -3,8 +3,11 @@ package template
 import (
 	"html/template"
 	"path"
+	"encoding/base64"
 
+	qr "github.com/skip2/go-qrcode"
 	sprig "github.com/Masterminds/sprig/v3"
+
 	"github.com/corpix/gdk/di"
 	"github.com/corpix/gdk/errors"
 	"github.com/davecgh/go-spew/spew"
@@ -94,6 +97,17 @@ func DefaultFuncMap() FuncMap {
 	em := FuncMap{
 		"dump":     spew.Sdump,
 		"pathJoin": path.Join,
+		"qr": func (content string, size int) URL {
+			q, err := qr.New(content, qr.Medium)
+			if err != nil {
+				panic(err)
+			}
+			buf, err := q.PNG(size)
+			if err != nil {
+				panic(err)
+			}
+			return URL("data:image/png;base64," + base64.StdEncoding.EncodeToString(buf))
+		},
 	}
 	for k, v := range em {
 		m[k] = v
