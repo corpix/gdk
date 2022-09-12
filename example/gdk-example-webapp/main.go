@@ -7,10 +7,12 @@ import (
 
 	"github.com/corpix/gdk/cli"
 	"github.com/corpix/gdk/config"
+	"github.com/corpix/gdk/crypto"
 	"github.com/corpix/gdk/di"
 	"github.com/corpix/gdk/http"
 	"github.com/corpix/gdk/log"
 	"github.com/corpix/gdk/template"
+	"github.com/davecgh/go-spew/spew"
 )
 
 type Config struct {
@@ -80,6 +82,8 @@ func main() {
 			http.WithInvoke(
 				di.Default,
 				func(h *http.Http, t *template.Template, csrf *http.CsrfTokenService, session *http.SessionService) {
+					ts := crypto.NewTokenService(session.Config.TokenConfig.TokenConfig)
+
 					h.Router.
 						HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 							w.Header().Add(http.HeaderContentType, http.MimeTextHtml)
@@ -108,6 +112,18 @@ func main() {
 							w.Write([]byte(greet.(string)))
 						}).
 						Methods(http.MethodPost)
+
+					h.Router.
+						HandleFunc("/token-service", func(w http.ResponseWriter, r *http.Request) {
+							tk := ts.New()
+							tk.Header.Meta.Set(crypto.TokenPayloadKeyId, "666")
+							tk.Header.Meta.Set(crypto.TokenPayloadKeyAudience, []string{"me", "friends"})
+							tk.Set(crypto.TokenPayloadKeyId, "777")
+							w.Write(ts.MustEncode(tk))
+							w.Write([]byte("\n\n"))
+							w.Write([]byte(spew.Sdump(tk)))
+						}).
+						Methods(http.MethodGet)
 
 					//
 

@@ -23,7 +23,7 @@ type (
 		*SkipConfig  `yaml:",inline,omitempty"`
 	}
 	Csrf                   = Token
-	CsrfPayloadKey         string
+	CsrfPayloadKey         = TokenPayloadKey
 	CsrfTokenContainer     TokenContainer
 	CsrfTokenEncodeDecoder TokenEncodeDecoder
 	CsrfTokenValidator     TokenValidator
@@ -98,7 +98,7 @@ func (c *CsrfConfig) Validate() error {
 //
 
 func CsrfTokenPathGet(t TokenMap) (string, error) {
-	rawPath, ok := t.Get(string(CsrfPayloadKeyPath))
+	rawPath, ok := t.Get(CsrfPayloadKeyPath)
 	if !ok {
 		return "", errors.Errorf(
 			"failed to load %q from csrf token payload",
@@ -109,7 +109,7 @@ func CsrfTokenPathGet(t TokenMap) (string, error) {
 }
 
 func CsrfTokenNonceGet(t TokenMap) (uint, error) {
-	rawNonce, ok := t.Get(string(CsrfPayloadKeyNonce))
+	rawNonce, ok := t.Get(CsrfPayloadKeyNonce)
 	if !ok {
 		return 0, errors.Errorf(
 			"failed to load %q from csrf token payload",
@@ -133,7 +133,7 @@ func CsrfTokenNonceGet(t TokenMap) (uint, error) {
 }
 
 func SessionTokenCsrfNonceGet(t TokenMap) uint {
-	rawNonce, ok := t.Get(string(SessionPayloadKeyCsrfNonce))
+	rawNonce, ok := t.Get(SessionPayloadKeyCsrfNonce)
 	if !ok {
 		sessionNonceBig, err := crypto.RandInt(big.NewInt(math.MaxInt))
 		if err != nil {
@@ -160,7 +160,7 @@ func SessionTokenCsrfNonceGet(t TokenMap) uint {
 }
 
 func SessionTokenCsrfNonceSet(t TokenMap, nonce uint) {
-	t.Set(string(SessionPayloadKeyCsrfNonce), nonce)
+	t.Set(SessionPayloadKeyCsrfNonce, nonce)
 }
 
 //
@@ -175,8 +175,8 @@ func (srv *CsrfTokenService) Generate(sess *Session, path string) ([]byte, error
 	nonce := SessionTokenCsrfNonceGet(sess)
 
 	csrf := NewCsrf(srv.Config)
-	csrf.Payload[string(CsrfPayloadKeyPath)] = path
-	csrf.Payload[string(CsrfPayloadKeyNonce)] = nonce
+	csrf.Payload[CsrfPayloadKeyPath] = path
+	csrf.Payload[CsrfPayloadKeyNonce] = nonce
 
 	tokenBytes, err := srv.Container.Encode(csrf)
 	if err != nil {

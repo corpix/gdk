@@ -36,20 +36,21 @@ type (
 	}
 	TokenCap    uint8
 	TokenHeader struct {
-		ValidAfter  time.Time `json:"valid-after"`
-		ValidBefore time.Time `json:"valid-before"`
+		ValidAfter  time.Time    `json:"valid-after"`
+		ValidBefore time.Time    `json:"valid-before"`
+		Meta        TokenPayload `json:"meta,omitempty"`
 	}
-	TokenPayload    map[string]interface{}
+	TokenPayload    map[TokenPayloadKey]interface{}
 	TokenPayloadKey string
 	TokenMap        interface {
-		Get(key string) (interface{}, bool)
-		Set(key string, value interface{})
-		Del(key string)
+		Get(key TokenPayloadKey) (interface{}, bool)
+		Set(key TokenPayloadKey, value interface{})
+		Del(key TokenPayloadKey) bool
 	}
 
 	TokenJwt struct {
-		jwt.RegisteredClaims
-		Payload TokenPayload `json:"payload"`
+		jwt.RegisteredClaims `json:",inline"`
+		Payload              TokenPayload `json:"payload"`
 	}
 	TokenJwtAlgorithm = jwt.Algorithm
 	TokenJwtHeader    = jwt.Header
@@ -144,6 +145,15 @@ type (
 	TokenValidatorExpire struct {
 		Config *TokenValidatorExpireConfig
 	}
+
+	TokenService struct {
+		Config        *TokenConfig
+		Options       []TokenServiceOption
+		Container     TokenContainer
+		EncodeDecoder TokenEncodeDecoder
+		Validator     TokenValidator
+	}
+	TokenServiceOption func(*Token)
 )
 
 const (
@@ -154,7 +164,10 @@ const (
 )
 
 const (
-	TokenPayloadKeyId TokenPayloadKey = "id"
+	TokenPayloadKeyId       TokenPayloadKey = "id"
+	TokenPayloadKeyAudience TokenPayloadKey = "audience"
+	TokenPayloadKeyIssuer   TokenPayloadKey = "issuer"
+	TokenPayloadKeySubject  TokenPayloadKey = "subject"
 
 	TokenEncodeDecoderTypeRaw    TokenEncodeDecoderType = "raw"
 	TokenEncodeDecoderTypeBase64 TokenEncodeDecoderType = "base64"
@@ -454,80 +467,122 @@ func (c *TokenContainerSecretBoxConfig) Expand() error {
 
 //
 
-func (s *Token) Seqno() uint { return s.seqno }
+func (t *Token) Get(key TokenPayloadKey) (interface{}, bool)  { return t.Payload.Get(key) }
+func (t *Token) MustGet(key TokenPayloadKey) interface{}      { return t.Payload.MustGet(key) }
+func (t *Token) GetBool(key TokenPayloadKey) (bool, bool)     { return t.Payload.GetBool(key) }
+func (t *Token) MustGetBool(key TokenPayloadKey) bool         { return t.Payload.MustGetBool(key) }
+func (t *Token) GetInt(key TokenPayloadKey) (int, bool)       { return t.Payload.GetInt(key) }
+func (t *Token) MustGetInt(key TokenPayloadKey) int           { return t.Payload.MustGetInt(key) }
+func (t *Token) GetUint(key TokenPayloadKey) (uint, bool)     { return t.Payload.GetUint(key) }
+func (t *Token) MustGetUint(key TokenPayloadKey) uint         { return t.Payload.MustGetUint(key) }
+func (t *Token) GetString(key TokenPayloadKey) (string, bool) { return t.Payload.GetString(key) }
+func (t *Token) MustGetString(key TokenPayloadKey) string     { return t.Payload.MustGetString(key) }
+func (t *Token) GetStringSlice(key TokenPayloadKey) ([]string, bool) {
+	return t.Payload.GetStringSlice(key)
+}
+func (t *Token) MustGetStringSlice(key TokenPayloadKey) []string {
+	return t.Payload.MustGetStringSlice(key)
+}
 
-func (s *Token) Get(key string) (interface{}, bool) {
-	v, ok := s.Payload[key]
+func (t *Token) Seqno() uint { return t.seqno }
+func (t *Token) Set(key TokenPayloadKey, value interface{}) {
+	t.Payload.Set(key, value)
+	t.seqno++
+}
+func (t *Token) Del(key TokenPayloadKey) bool {
+	if t.Payload.Del(key) {
+		t.seqno++
+		return true
+	}
+	return false
+}
+
+//
+
+func (p TokenPayload) Get(key TokenPayloadKey) (interface{}, bool) {
+	v, ok := p[key]
 	return v, ok
 }
 
-func (s *Token) MustGet(key string) interface{} {
-	v, ok := s.Get(key)
+func (p TokenPayload) MustGet(key TokenPayloadKey) interface{} {
+	v, ok := p.Get(key)
 	if !ok {
 		panic(errors.Errorf("no key %q found", key))
 	}
 	return v
 }
 
-func (s *Token) GetBool(key string) (bool, bool) {
-	v, ok := s.Payload[key]
+func (p TokenPayload) GetBool(key TokenPayloadKey) (bool, bool) {
+	v, ok := p[key]
 	if ok {
 		return v.(bool), ok
 	}
 	return false, false
 }
 
-func (s *Token) MustGetBool(key string) bool {
-	return s.MustGet(key).(bool)
+func (p TokenPayload) MustGetBool(key TokenPayloadKey) bool {
+	return p.MustGet(key).(bool)
 }
 
-func (s *Token) GetInt(key string) (int, bool) {
-	v, ok := s.Payload[key]
+func (p TokenPayload) GetInt(key TokenPayloadKey) (int, bool) {
+	v, ok := p[key]
 	if ok {
 		return v.(int), ok
 	}
 	return 0, false
 }
 
-func (s *Token) MustGetInt(key string) int {
-	return s.MustGet(key).(int)
+func (p TokenPayload) MustGetInt(key TokenPayloadKey) int {
+	return p.MustGet(key).(int)
 }
 
-func (s *Token) GetUint(key string) (uint, bool) {
-	v, ok := s.Payload[key]
+func (p TokenPayload) GetUint(key TokenPayloadKey) (uint, bool) {
+	v, ok := p[key]
 	if ok {
 		return v.(uint), ok
 	}
 	return 0, false
 }
 
-func (s *Token) MustGetUint(key string) uint {
-	return s.MustGet(key).(uint)
+func (p TokenPayload) MustGetUint(key TokenPayloadKey) uint {
+	return p.MustGet(key).(uint)
 }
 
-func (s *Token) GetString(key string) (string, bool) {
-	v, ok := s.Payload[key]
+func (p TokenPayload) GetString(key TokenPayloadKey) (string, bool) {
+	v, ok := p[key]
 	if ok {
 		return v.(string), ok
 	}
 	return "", false
 }
 
-func (s *Token) MustGetString(key string) string {
-	return s.MustGet(key).(string)
+func (p TokenPayload) MustGetString(key TokenPayloadKey) string {
+	return p.MustGet(key).(string)
 }
 
-func (s *Token) Set(key string, value interface{}) {
-	s.Payload[key] = value
-	s.seqno++
-}
-
-func (s *Token) Del(key string) {
-	_, ok := s.Payload[key]
+func (p TokenPayload) GetStringSlice(key TokenPayloadKey) ([]string, bool) {
+	v, ok := p[key]
 	if ok {
-		delete(s.Payload, key)
-		s.seqno++
+		return v.([]string), ok
 	}
+	return []string{}, false
+}
+
+func (p TokenPayload) MustGetStringSlice(key TokenPayloadKey) []string {
+	return p.MustGet(key).([]string)
+}
+
+func (p TokenPayload) Set(key TokenPayloadKey, value interface{}) {
+	p[key] = value
+}
+
+func (p TokenPayload) Del(key TokenPayloadKey) bool {
+	_, ok := p[key]
+	if ok {
+		delete(p, key)
+		return true
+	}
+	return false
 }
 
 //
@@ -539,6 +594,7 @@ func NewToken(c *TokenConfig) *Token {
 		Header: TokenHeader{
 			ValidAfter:  now,
 			ValidBefore: now.Add(*c.Validator.Expire.MaxAge),
+			Meta:        TokenPayload{},
 		},
 		Payload: TokenPayload{},
 	}
@@ -642,13 +698,33 @@ func NewTokenContainerJson(c *TokenContainerJsonConfig) *TokenContainerJson {
 //
 
 func (c *TokenContainerJwt) Encode(s *Token) ([]byte, error) {
+	claims := jwt.RegisteredClaims{
+		NotBefore: &jwt.NumericDate{Time: s.Header.ValidAfter},
+		IssuedAt:  &jwt.NumericDate{Time: s.Header.ValidAfter},
+		ExpiresAt: &jwt.NumericDate{Time: s.Header.ValidBefore},
+	}
+	id, ok := s.Header.Meta.GetString(TokenPayloadKeyId)
+	if ok {
+		claims.ID = id
+	}
+	audience, ok := s.Header.Meta.GetStringSlice(TokenPayloadKeyAudience)
+	if ok {
+		claims.Audience = audience
+	}
+	issuer, ok := s.Header.Meta.GetString(TokenPayloadKeyIssuer)
+	if ok {
+		claims.Issuer = issuer
+	}
+	subject, ok := s.Header.Meta.GetString(TokenPayloadKeySubject)
+	if ok {
+		claims.Subject = subject
+	}
+
+	//
+
 	token, err := c.Builder.Build(&TokenJwt{
-		RegisteredClaims: jwt.RegisteredClaims{
-			NotBefore: &jwt.NumericDate{Time: s.Header.ValidAfter},
-			IssuedAt:  &jwt.NumericDate{Time: s.Header.ValidAfter},
-			ExpiresAt: &jwt.NumericDate{Time: s.Header.ValidBefore},
-		},
-		Payload: s.Payload,
+		RegisteredClaims: claims,
+		Payload:          s.Payload,
 	})
 	if err != nil {
 		return nil, err
@@ -662,12 +738,30 @@ func (c *TokenContainerJwt) Decode(buf []byte) (*Token, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Token{}
-	s.Header = TokenHeader{
-		ValidAfter:  j.RegisteredClaims.IssuedAt.Time,
-		ValidBefore: j.RegisteredClaims.ExpiresAt.Time,
+	s := &Token{
+		Header: TokenHeader{
+			ValidAfter:  j.RegisteredClaims.IssuedAt.Time,
+			ValidBefore: j.RegisteredClaims.ExpiresAt.Time,
+		},
+		Payload: j.Payload,
 	}
-	s.Payload = j.Payload
+
+	meta := TokenPayload{}
+	if j.RegisteredClaims.ID != "" {
+		meta.Set(TokenPayloadKeyId, j.RegisteredClaims.ID)
+	}
+	if len(j.RegisteredClaims.Audience) > 0 {
+		meta.Set(TokenPayloadKeyAudience, j.RegisteredClaims.Audience)
+	}
+	if j.RegisteredClaims.Issuer != "" {
+		meta.Set(TokenPayloadKeyIssuer, j.RegisteredClaims.Issuer)
+	}
+	if j.RegisteredClaims.Subject != "" {
+		meta.Set(TokenPayloadKeySubject, j.RegisteredClaims.Subject)
+	}
+
+	s.Header.Meta = meta
+
 	return s, nil
 }
 func (c *TokenContainerJwt) Cap() (tc TokenCap) {
@@ -885,4 +979,75 @@ func NewTokenEncodeDecoder(t string) TokenEncodeDecoder {
 		panic(errors.Errorf("unsupported encode decoder type %q", t))
 	}
 	return e
+}
+
+//
+
+func (srv TokenService) New() *Token {
+	token := NewToken(srv.Config)
+	for _, op := range srv.Options {
+		op(token)
+	}
+	return token
+}
+
+func (srv TokenService) Encode(token *Token) ([]byte, error) {
+	tokenBytes, err := srv.Container.Encode(token)
+	if err != nil {
+		return nil, err
+	}
+	if srv.EncodeDecoder != nil {
+		return srv.EncodeDecoder.Encode(tokenBytes)
+	}
+	return tokenBytes, nil
+}
+
+func (srv TokenService) MustEncode(token *Token) []byte {
+	buf, err := srv.Encode(token)
+	if err != nil {
+		panic(err)
+	}
+	return buf
+}
+
+func (srv TokenService) Decode(buf []byte) (*Token, error) {
+	var err error
+	if srv.EncodeDecoder != nil {
+		buf, err = srv.EncodeDecoder.Decode(buf)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return srv.Container.Decode(buf)
+}
+
+func (srv TokenService) MustDecode(buf []byte) *Token {
+	t, err := srv.Decode(buf)
+	if err != nil {
+		panic(err)
+	}
+	return t
+}
+
+func (srv TokenService) Validate(t *Token) error {
+	if !*srv.Config.Validator.Enable {
+		return nil
+	}
+
+	err := srv.Validator.Validate(t)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func NewTokenService(c *TokenConfig, options ...TokenServiceOption) *TokenService {
+	return &TokenService{
+		Config:        c,
+		Options:       options,
+		Container:     NewTokenContainer(c.Container),
+		EncodeDecoder: NewTokenEncodeDecoder(c.Encoder),
+		Validator:     NewTokenValidator(c.Validator),
+	}
 }

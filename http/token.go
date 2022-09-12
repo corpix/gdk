@@ -84,8 +84,6 @@ type (
 )
 
 const (
-	TokenPayloadKeyId TokenPayloadKey = "id"
-
 	TokenStoreTypeCookie TokenStoreType = "cookie"
 	TokenStoreTypeRedis  TokenStoreType = "redis"
 )
@@ -329,12 +327,12 @@ func (s *TokenStoreRedis) Id(r *Request) ([]byte, error) {
 
 func (s *TokenStoreRedis) Save(t *Token) ([]byte, error) {
 	var id string
-	rawId, ok := t.Get(string(TokenPayloadKeyId))
+	rawId, ok := t.Get(crypto.TokenPayloadKeyId)
 	if ok {
 		id = rawId.(string)
 	} else {
 		id = uuid.NewString()
-		t.Set(string(TokenPayloadKeyId), id)
+		t.Set(crypto.TokenPayloadKeyId, id)
 	}
 
 	buf, err := s.Container.Encode(t)

@@ -6,19 +6,23 @@ http:
   session:
     enable: true
     store:
-      type: redis
+      # type: redis
     container:
       ## secretbox is default
-      # type: jwt
+      type: jwt
       secretbox:
         key: d3add3add3add3add3add3add3add3add3add3add3add3add3add3add3add3ad
-      # jwt:
-      #   algorithm: hs256
-      #   key: insecure
+      jwt:
+        algorithm: hs256
+        key: insecure
     # validator:
     #   refresh: 5s
   csrf:
     enable: true
     container:
+      type: jwt
       secretbox:
         key: d3add3add3add3add3add3add3add3add3add3add3add3add3add3add3add3ad
+      jwt:
+        algorithm: hs256
+        key: insecure
