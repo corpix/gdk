@@ -1,12 +1,12 @@
 package template
 
 import (
+	"encoding/base64"
 	"html/template"
 	"path"
-	"encoding/base64"
 
-	qr "github.com/skip2/go-qrcode"
 	sprig "github.com/Masterminds/sprig/v3"
+	qr "github.com/skip2/go-qrcode"
 
 	"github.com/corpix/gdk/di"
 	"github.com/corpix/gdk/errors"
@@ -97,7 +97,7 @@ func DefaultFuncMap() FuncMap {
 	em := FuncMap{
 		"dump":     spew.Sdump,
 		"pathJoin": path.Join,
-		"qr": func (content string, size int) URL {
+		"qr": func(content string, size int) URL {
 			q, err := qr.New(content, qr.Medium)
 			if err != nil {
 				panic(err)

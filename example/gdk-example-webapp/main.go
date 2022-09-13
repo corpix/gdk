@@ -116,9 +116,9 @@ func main() {
 					h.Router.
 						HandleFunc("/token-service", func(w http.ResponseWriter, r *http.Request) {
 							tk := ts.New()
-							tk.Header.Meta.Set(crypto.TokenPayloadKeyId, "666")
-							tk.Header.Meta.Set(crypto.TokenPayloadKeyAudience, []string{"me", "friends"})
-							tk.Set(crypto.TokenPayloadKeyId, "777")
+							tk.Header.Meta.Set(crypto.TokenHeaderMapKeyId, "666")
+							tk.Header.Meta.Set(crypto.TokenHeaderMapKeyAudience, []string{"me", "friends"})
+							tk.Set(crypto.TokenHeaderMapKeyId, "777")
 							w.Write(ts.MustEncode(tk))
 							w.Write([]byte("\n\n"))
 							w.Write([]byte(spew.Sdump(tk)))

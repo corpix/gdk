@@ -24,7 +24,7 @@ type (
 	TokenValidatorConfig = crypto.TokenValidatorConfig
 	TokenMap             = crypto.TokenMap
 	TokenPayload         = crypto.TokenPayload
-	TokenPayloadKey      = crypto.TokenPayloadKey
+	TokenMapKey          = crypto.TokenMapKey
 	TokenContainerType   = crypto.TokenContainerType
 	TokenValidatorType   = crypto.TokenValidatorType
 
@@ -327,12 +327,12 @@ func (s *TokenStoreRedis) Id(r *Request) ([]byte, error) {
 
 func (s *TokenStoreRedis) Save(t *Token) ([]byte, error) {
 	var id string
-	rawId, ok := t.Get(crypto.TokenPayloadKeyId)
+	rawId, ok := t.Get(crypto.TokenHeaderMapKeyId)
 	if ok {
 		id = rawId.(string)
 	} else {
 		id = uuid.NewString()
-		t.Set(crypto.TokenPayloadKeyId, id)
+		t.Set(crypto.TokenHeaderMapKeyId, id)
 	}
 
 	buf, err := s.Container.Encode(t)

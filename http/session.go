@@ -20,7 +20,7 @@ type (
 	SessionValidator     TokenValidator
 	SessionEncodeDecoder TokenEncodeDecoder
 	SessionContainer     TokenContainer
-	SessionPayloadKey    = TokenPayloadKey
+	SessionMapKey        = TokenMapKey
 	SessionService       struct {
 		Config        *SessionConfig
 		Container     SessionContainer

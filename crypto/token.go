@@ -11,6 +11,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"math/big"
 	"strings"
 	"time"
@@ -40,18 +41,15 @@ type (
 		ValidBefore time.Time    `json:"valid-before"`
 		Meta        TokenPayload `json:"meta,omitempty"`
 	}
-	TokenPayload    map[TokenPayloadKey]interface{}
-	TokenPayloadKey string
-	TokenMap        interface {
-		Get(key TokenPayloadKey) (interface{}, bool)
-		Set(key TokenPayloadKey, value interface{})
-		Del(key TokenPayloadKey) bool
+	TokenPayload map[TokenMapKey]interface{}
+	TokenMapKey  string
+	TokenMap     interface {
+		Get(key TokenMapKey) (interface{}, bool)
+		Set(key TokenMapKey, value interface{})
+		Del(key TokenMapKey) bool
 	}
 
-	TokenJwt struct {
-		jwt.RegisteredClaims `json:",inline"`
-		Payload              TokenPayload `json:"payload"`
-	}
+	TokenJwt          map[TokenMapKey]interface{}
 	TokenJwtAlgorithm = jwt.Algorithm
 	TokenJwtHeader    = jwt.Header
 
@@ -164,10 +162,19 @@ const (
 )
 
 const (
-	TokenPayloadKeyId       TokenPayloadKey = "id"
-	TokenPayloadKeyAudience TokenPayloadKey = "audience"
-	TokenPayloadKeyIssuer   TokenPayloadKey = "issuer"
-	TokenPayloadKeySubject  TokenPayloadKey = "subject"
+	TokenHeaderMapKeyId       TokenMapKey = "id"
+	TokenHeaderMapKeyAudience TokenMapKey = "audience"
+	TokenHeaderMapKeyIssuer   TokenMapKey = "issuer"
+	TokenHeaderMapKeySubject  TokenMapKey = "subject"
+
+	TokenJwtMapKeyId        TokenMapKey = "jti"
+	TokenJwtMapKeyAudience  TokenMapKey = "aud"
+	TokenJwtMapKeyIssuer    TokenMapKey = "iss"
+	TokenJwtMapKeySubject   TokenMapKey = "sub"
+	TokenJwtMapKeyExpiresAt TokenMapKey = "exp"
+	TokenJwtMapKeyIssuedAt  TokenMapKey = "iat"
+	TokenJwtMapKeyNotBefore TokenMapKey = "nbf"
+	TokenJwtMapKeyPayload   TokenMapKey = "payload"
 
 	TokenEncodeDecoderTypeRaw    TokenEncodeDecoderType = "raw"
 	TokenEncodeDecoderTypeBase64 TokenEncodeDecoderType = "base64"
@@ -198,6 +205,13 @@ const (
 )
 
 var (
+	TokenJwtHeaderMapKeys = map[TokenMapKey]TokenMapKey{
+		TokenHeaderMapKeyId:       TokenJwtMapKeyId,
+		TokenHeaderMapKeyAudience: TokenJwtMapKeyAudience,
+		TokenHeaderMapKeyIssuer:   TokenJwtMapKeyIssuer,
+		TokenHeaderMapKeySubject:  TokenJwtMapKeySubject,
+	}
+
 	TokenJwtAlgorithms = map[string]TokenJwtAlgorithm{
 		strings.ToLower(string(TokenJwtAlgorithmEdDSA)): TokenJwtAlgorithmEdDSA,
 		strings.ToLower(string(TokenJwtAlgorithmHS256)): TokenJwtAlgorithmHS256,
@@ -467,29 +481,29 @@ func (c *TokenContainerSecretBoxConfig) Expand() error {
 
 //
 
-func (t *Token) Get(key TokenPayloadKey) (interface{}, bool)  { return t.Payload.Get(key) }
-func (t *Token) MustGet(key TokenPayloadKey) interface{}      { return t.Payload.MustGet(key) }
-func (t *Token) GetBool(key TokenPayloadKey) (bool, bool)     { return t.Payload.GetBool(key) }
-func (t *Token) MustGetBool(key TokenPayloadKey) bool         { return t.Payload.MustGetBool(key) }
-func (t *Token) GetInt(key TokenPayloadKey) (int, bool)       { return t.Payload.GetInt(key) }
-func (t *Token) MustGetInt(key TokenPayloadKey) int           { return t.Payload.MustGetInt(key) }
-func (t *Token) GetUint(key TokenPayloadKey) (uint, bool)     { return t.Payload.GetUint(key) }
-func (t *Token) MustGetUint(key TokenPayloadKey) uint         { return t.Payload.MustGetUint(key) }
-func (t *Token) GetString(key TokenPayloadKey) (string, bool) { return t.Payload.GetString(key) }
-func (t *Token) MustGetString(key TokenPayloadKey) string     { return t.Payload.MustGetString(key) }
-func (t *Token) GetStringSlice(key TokenPayloadKey) ([]string, bool) {
+func (t *Token) Get(key TokenMapKey) (interface{}, bool)  { return t.Payload.Get(key) }
+func (t *Token) MustGet(key TokenMapKey) interface{}      { return t.Payload.MustGet(key) }
+func (t *Token) GetBool(key TokenMapKey) (bool, bool)     { return t.Payload.GetBool(key) }
+func (t *Token) MustGetBool(key TokenMapKey) bool         { return t.Payload.MustGetBool(key) }
+func (t *Token) GetInt(key TokenMapKey) (int, bool)       { return t.Payload.GetInt(key) }
+func (t *Token) MustGetInt(key TokenMapKey) int           { return t.Payload.MustGetInt(key) }
+func (t *Token) GetUint(key TokenMapKey) (uint, bool)     { return t.Payload.GetUint(key) }
+func (t *Token) MustGetUint(key TokenMapKey) uint         { return t.Payload.MustGetUint(key) }
+func (t *Token) GetString(key TokenMapKey) (string, bool) { return t.Payload.GetString(key) }
+func (t *Token) MustGetString(key TokenMapKey) string     { return t.Payload.MustGetString(key) }
+func (t *Token) GetStringSlice(key TokenMapKey) ([]string, bool) {
 	return t.Payload.GetStringSlice(key)
 }
-func (t *Token) MustGetStringSlice(key TokenPayloadKey) []string {
+func (t *Token) MustGetStringSlice(key TokenMapKey) []string {
 	return t.Payload.MustGetStringSlice(key)
 }
 
 func (t *Token) Seqno() uint { return t.seqno }
-func (t *Token) Set(key TokenPayloadKey, value interface{}) {
+func (t *Token) Set(key TokenMapKey, value interface{}) {
 	t.Payload.Set(key, value)
 	t.seqno++
 }
-func (t *Token) Del(key TokenPayloadKey) bool {
+func (t *Token) Del(key TokenMapKey) bool {
 	if t.Payload.Del(key) {
 		t.seqno++
 		return true
@@ -499,12 +513,12 @@ func (t *Token) Del(key TokenPayloadKey) bool {
 
 //
 
-func (p TokenPayload) Get(key TokenPayloadKey) (interface{}, bool) {
+func (p TokenPayload) Get(key TokenMapKey) (interface{}, bool) {
 	v, ok := p[key]
 	return v, ok
 }
 
-func (p TokenPayload) MustGet(key TokenPayloadKey) interface{} {
+func (p TokenPayload) MustGet(key TokenMapKey) interface{} {
 	v, ok := p.Get(key)
 	if !ok {
 		panic(errors.Errorf("no key %q found", key))
@@ -512,7 +526,7 @@ func (p TokenPayload) MustGet(key TokenPayloadKey) interface{} {
 	return v
 }
 
-func (p TokenPayload) GetBool(key TokenPayloadKey) (bool, bool) {
+func (p TokenPayload) GetBool(key TokenMapKey) (bool, bool) {
 	v, ok := p[key]
 	if ok {
 		return v.(bool), ok
@@ -520,11 +534,11 @@ func (p TokenPayload) GetBool(key TokenPayloadKey) (bool, bool) {
 	return false, false
 }
 
-func (p TokenPayload) MustGetBool(key TokenPayloadKey) bool {
+func (p TokenPayload) MustGetBool(key TokenMapKey) bool {
 	return p.MustGet(key).(bool)
 }
 
-func (p TokenPayload) GetInt(key TokenPayloadKey) (int, bool) {
+func (p TokenPayload) GetInt(key TokenMapKey) (int, bool) {
 	v, ok := p[key]
 	if ok {
 		return v.(int), ok
@@ -532,11 +546,11 @@ func (p TokenPayload) GetInt(key TokenPayloadKey) (int, bool) {
 	return 0, false
 }
 
-func (p TokenPayload) MustGetInt(key TokenPayloadKey) int {
+func (p TokenPayload) MustGetInt(key TokenMapKey) int {
 	return p.MustGet(key).(int)
 }
 
-func (p TokenPayload) GetUint(key TokenPayloadKey) (uint, bool) {
+func (p TokenPayload) GetUint(key TokenMapKey) (uint, bool) {
 	v, ok := p[key]
 	if ok {
 		return v.(uint), ok
@@ -544,11 +558,11 @@ func (p TokenPayload) GetUint(key TokenPayloadKey) (uint, bool) {
 	return 0, false
 }
 
-func (p TokenPayload) MustGetUint(key TokenPayloadKey) uint {
+func (p TokenPayload) MustGetUint(key TokenMapKey) uint {
 	return p.MustGet(key).(uint)
 }
 
-func (p TokenPayload) GetString(key TokenPayloadKey) (string, bool) {
+func (p TokenPayload) GetString(key TokenMapKey) (string, bool) {
 	v, ok := p[key]
 	if ok {
 		return v.(string), ok
@@ -556,11 +570,11 @@ func (p TokenPayload) GetString(key TokenPayloadKey) (string, bool) {
 	return "", false
 }
 
-func (p TokenPayload) MustGetString(key TokenPayloadKey) string {
+func (p TokenPayload) MustGetString(key TokenMapKey) string {
 	return p.MustGet(key).(string)
 }
 
-func (p TokenPayload) GetStringSlice(key TokenPayloadKey) ([]string, bool) {
+func (p TokenPayload) GetStringSlice(key TokenMapKey) ([]string, bool) {
 	v, ok := p[key]
 	if ok {
 		return v.([]string), ok
@@ -568,15 +582,15 @@ func (p TokenPayload) GetStringSlice(key TokenPayloadKey) ([]string, bool) {
 	return []string{}, false
 }
 
-func (p TokenPayload) MustGetStringSlice(key TokenPayloadKey) []string {
+func (p TokenPayload) MustGetStringSlice(key TokenMapKey) []string {
 	return p.MustGet(key).([]string)
 }
 
-func (p TokenPayload) Set(key TokenPayloadKey, value interface{}) {
+func (p TokenPayload) Set(key TokenMapKey, value interface{}) {
 	p[key] = value
 }
 
-func (p TokenPayload) Del(key TokenPayloadKey) bool {
+func (p TokenPayload) Del(key TokenMapKey) bool {
 	_, ok := p[key]
 	if ok {
 		delete(p, key)
@@ -698,34 +712,18 @@ func NewTokenContainerJson(c *TokenContainerJsonConfig) *TokenContainerJson {
 //
 
 func (c *TokenContainerJwt) Encode(s *Token) ([]byte, error) {
-	claims := jwt.RegisteredClaims{
-		NotBefore: &jwt.NumericDate{Time: s.Header.ValidAfter},
-		IssuedAt:  &jwt.NumericDate{Time: s.Header.ValidAfter},
-		ExpiresAt: &jwt.NumericDate{Time: s.Header.ValidBefore},
-	}
-	id, ok := s.Header.Meta.GetString(TokenPayloadKeyId)
-	if ok {
-		claims.ID = id
-	}
-	audience, ok := s.Header.Meta.GetStringSlice(TokenPayloadKeyAudience)
-	if ok {
-		claims.Audience = audience
-	}
-	issuer, ok := s.Header.Meta.GetString(TokenPayloadKeyIssuer)
-	if ok {
-		claims.Issuer = issuer
-	}
-	subject, ok := s.Header.Meta.GetString(TokenPayloadKeySubject)
-	if ok {
-		claims.Subject = subject
+	t := TokenJwt{
+		TokenJwtMapKeyNotBefore: &jwt.NumericDate{Time: s.Header.ValidAfter},
+		TokenJwtMapKeyIssuedAt:  &jwt.NumericDate{Time: s.Header.ValidAfter},
+		TokenJwtMapKeyExpiresAt: &jwt.NumericDate{Time: s.Header.ValidBefore},
+		TokenJwtMapKeyPayload:   s.Payload,
 	}
 
-	//
+	for key, value := range s.Header.Meta {
+		t[TokenJwtHeaderMapKeys[key]] = value
+	}
 
-	token, err := c.Builder.Build(&TokenJwt{
-		RegisteredClaims: claims,
-		Payload:          s.Payload,
-	})
+	token, err := c.Builder.Build(t)
 	if err != nil {
 		return nil, err
 	}
@@ -733,36 +731,59 @@ func (c *TokenContainerJwt) Encode(s *Token) ([]byte, error) {
 	return token.Bytes(), nil
 }
 func (c *TokenContainerJwt) Decode(buf []byte) (*Token, error) {
-	j := &TokenJwt{}
-	err := jwt.ParseClaims(buf, c.Verifier, j)
+	j := TokenJwt{}
+	err := jwt.ParseClaims(buf, c.Verifier, &j)
 	if err != nil {
 		return nil, err
 	}
-	s := &Token{
-		Header: TokenHeader{
-			ValidAfter:  j.RegisteredClaims.IssuedAt.Time,
-			ValidBefore: j.RegisteredClaims.ExpiresAt.Time,
-		},
-		Payload: j.Payload,
+	t := &Token{}
+
+	// NOTE: payload must be parsed before
+	// because we destructively delete keys from original token
+	// to organize them
+
+	pm := j[TokenJwtMapKeyPayload].(map[string]interface{})
+	delete(j, TokenJwtMapKeyPayload)
+
+	p := make(TokenPayload, len(pm))
+	for k, v := range pm {
+		p[TokenMapKey(k)] = v
+	}
+	t.Payload = p
+
+	//
+
+	h := TokenHeader{Meta: TokenPayload{}}
+	for _, key := range []TokenMapKey{
+		TokenJwtMapKeyNotBefore,
+		TokenJwtMapKeyIssuedAt,
+		TokenJwtMapKeyExpiresAt,
+	} {
+		ts, ok := j[key].(float64)
+		if ok {
+			sec, dec := math.Modf(ts)
+			tsn := time.Unix(
+				int64(sec),
+				int64(dec*1e19),
+			)
+			switch key {
+			case TokenJwtMapKeyNotBefore, TokenJwtMapKeyIssuedAt:
+				h.ValidAfter = tsn
+			case TokenJwtMapKeyExpiresAt:
+				h.ValidBefore = tsn
+			}
+			delete(j, key)
+		}
 	}
 
-	meta := TokenPayload{}
-	if j.RegisteredClaims.ID != "" {
-		meta.Set(TokenPayloadKeyId, j.RegisteredClaims.ID)
+	for k, v := range j {
+		h.Meta[k] = v
 	}
-	if len(j.RegisteredClaims.Audience) > 0 {
-		meta.Set(TokenPayloadKeyAudience, j.RegisteredClaims.Audience)
-	}
-	if j.RegisteredClaims.Issuer != "" {
-		meta.Set(TokenPayloadKeyIssuer, j.RegisteredClaims.Issuer)
-	}
-	if j.RegisteredClaims.Subject != "" {
-		meta.Set(TokenPayloadKeySubject, j.RegisteredClaims.Subject)
-	}
+	t.Header = h
 
-	s.Header.Meta = meta
+	//
 
-	return s, nil
+	return t, nil
 }
 func (c *TokenContainerJwt) Cap() (tc TokenCap) {
 	tc = tc.Set(TokenCapAuthenticated)
