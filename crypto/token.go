@@ -719,8 +719,16 @@ func (c *TokenContainerJwt) Encode(s *Token) ([]byte, error) {
 		TokenJwtMapKeyPayload:   s.Payload,
 	}
 
+	var (
+		k  TokenMapKey
+		ok bool
+	)
 	for key, value := range s.Header.Meta {
-		t[TokenJwtHeaderMapKeys[key]] = value
+		k, ok = TokenJwtHeaderMapKeys[key]
+		if !ok {
+			k = key
+		}
+		t[k] = value
 	}
 
 	token, err := c.Builder.Build(t)
