@@ -66,4 +66,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace gopkg.in/yaml.v2 v2.4.0 => github.com/corpix/yaml v0.0.0-20220706182535-91862f77ddd0
+replace gopkg.in/yaml.v2 v2.4.0 => github.com/corpix/yaml v0.0.0-20220915223554-1dedc5fdfc2b
