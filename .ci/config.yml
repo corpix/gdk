@@ -1,0 +1,14 @@
+version: v0
+
+runs:
+  - name: build
+    tasks:
+      - name: configurations
+        environment:
+          NIX_PATH: nixpkgs=http://git.pluto.backbone/corpix/nixpkgs/archive/corpix.tar.gz
+        runtime:
+          containers:
+            - image: nixos/nix:2.11.1
+        steps:
+          - clone: {}
+          - run: nix-shell --command 'make test'
