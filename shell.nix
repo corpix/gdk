@@ -29,7 +29,7 @@ in stdenv.mkDerivation rec {
     export LANG="en_US.UTF-8"
     export NIX_PATH="nixpkgs=${nixpkgs}"
 
-    if [ ! -z "$PS1" ]
+    if [ -z "$CI" ]
     then
       export SHELL="${shellWrapper}"
       exec "$SHELL"
