@@ -117,7 +117,7 @@ func WithProxy(c *ProxyConfig, options ...ProxyOption) Option {
 	}
 }
 
-func WithProxyPredicate(pred func(ResponseWriter, *Request) bool) ProxyOption {
+func WithProxyPredicate(pred func(*Http, ResponseWriter, *Request) bool) ProxyOption {
 	return func(p *Proxy) {
 		p.Predicate = pred
 	}
