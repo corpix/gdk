@@ -415,7 +415,7 @@ func WithHttpTools(cfg func() *http.Config, extraOptions ...http.Option) Option 
 
 						if conf.Proxy != nil && conf.Proxy.Enable {
 							var proxyOptions []http.ProxyOption
-							_ = di.Provide(di.Default, func(po []http.ProxyOption) {
+							_ = di.Invoke(di.Default, func(po []http.ProxyOption) {
 								proxyOptions = po
 							})
 							options = append(options, http.WithProxy(conf.Proxy, proxyOptions...))
