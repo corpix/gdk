@@ -21,7 +21,7 @@ type (
 	Proxy struct {
 		Config    *ProxyConfig
 		Balancer  ProxyBalancer
-		Predicate func(ResponseWriter, *Request) bool
+		Predicate func(*Http, ResponseWriter, *Request) bool
 	}
 	ProxyOption func(*Proxy)
 
@@ -107,7 +107,7 @@ func WithProxy(c *ProxyConfig, options ...ProxyOption) Option {
 		for location := range c.Locations {
 			h.Router.HandleFunc(location, func(w ResponseWriter, r *Request) {
 				if p.Predicate != nil {
-					if !p.Predicate(w, r) {
+					if !p.Predicate(h, w, r) {
 						return
 					}
 				}
