@@ -3,7 +3,7 @@ version: v0
 runs:
   - name: build
     tasks:
-      - name: configurations
+      - name: test
         environment:
           NIX_PATH: nixpkgs=http://git.pluto.backbone/corpix/nixpkgs/archive/corpix.tar.gz
         runtime:
@@ -11,4 +11,10 @@ runs:
             - image: nixos/nix:2.11.1
         steps:
           - clone: {}
+          - type: restore_cache
+            keys: [go]
+            dest_dir: "~/go"
           - run: nix-shell --command 'make test'
+          - type: save_cache
+            key: go
+            contents: [{ source_dir: "~/go" }]
