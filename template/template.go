@@ -59,9 +59,9 @@ func NewContext() Context { return Context{} }
 
 //
 
-func WithProvide(cont *di.Container) Option {
+func WithProvide(cont *di.Container, options ...di.ProvideOption) Option {
 	return func(t *Template) {
-		di.MustProvide(cont, func() *Template { return t })
+		di.MustProvide(cont, func() *Template { return t }, options...)
 	}
 }
 

@@ -215,9 +215,9 @@ func WithLogAvailableRoutes() Option {
 	}
 }
 
-func WithProvide(cont *di.Container) Option {
+func WithProvide(cont *di.Container, options ...di.ProvideOption) Option {
 	return func(h *Http) {
-		di.MustProvide(cont, func() *Http { return h })
+		di.MustProvide(cont, func() *Http { return h }, options...)
 	}
 }
 
