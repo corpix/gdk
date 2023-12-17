@@ -303,134 +303,145 @@ func WithLogTools(cfg func() *log.Config, extraOptions ...log.Option) Option {
 	)
 }
 
-func WithHttpTools(cfg func() *http.Config, extraOptions ...http.Option) Option {
+func WithHttpToolsCommand(command func(*Command) *Command, cfg func() *http.Config, extraOptions ...http.Option) Option {
 	return func(c *Cli) {
-		c.Commands = append(c.Commands, &Command{
-			Name:    "http",
-			Aliases: []string{"ht"},
-			Usage:   "HTTP server tools",
-			Flags: Flags{
-				&StringFlag{
-					Name:    "address",
-					Aliases: []string{"a"},
-					Usage:   "address:port to listen on",
-				},
-			},
-			Subcommands: Commands{
-				&Command{
-					Name:    "serve",
-					Aliases: []string{"s"},
-					Usage:   "Run server listener",
-					Action: func(ctx *Context) error {
-						conf := cfg()
-						address := ctx.String("address")
-						if address == "" {
-							address = conf.Address
-						}
-
-						//
-
-						router := http.NewRouter(conf)
-						di.MustProvide(di.Default, func() *http.Router { return router })
-
-						//
-
-						middleware := []http.Middleware{}
-						options := []http.Option{
-							http.WithRouter(router),
-						}
-						templateOptions := []template.Option{}
-
-						//
-
-						// NOTE: buffered response middleware should be first middleware
-						// it is required when you use middleare like Session
-						switch {
-						case conf.Session == nil || !conf.Session.Enable:
-						default:
-							middleware = append(middleware, http.MiddlewareBufferedResponse(conf.BufferedResponse))
-						}
-						middleware = append(
-							middleware,
-							http.MiddlewareTrace(conf.Trace),
-							http.MiddlewareRecover(func() http.RecoverHandler {
-								var errHandler http.RecoverHandler
-								_ = di.Invoke(di.Default, func(handler http.RecoverHandler) {
-									errHandler = handler
-								})
-								return errHandler
-							}),
-						)
-
-						//
-
-						if conf.Metrics.Enable {
-							middleware = append(middleware, http.MiddlewareMetrics(conf.Metrics))
-							options = append(options, http.WithMetricsHandler(metrics.Default))
-						}
-
-						if conf.Session != nil && conf.Session.Enable {
-							sessionService := http.NewSessionService(conf.Session)
-							middleware = append(
-								middleware,
-								http.MiddlewareSession(sessionService),
-							)
-							di.MustProvide(di.Default, func() *http.SessionService { return sessionService })
-						}
-
-						if conf.Csrf != nil && conf.Csrf.Enable {
-							csrf := http.NewCsrfTokenService(conf.Csrf)
-							middleware = append(
-								middleware,
-								http.MiddlewareCsrf(csrf),
-							)
-							di.MustProvide(di.Default, func() *http.CsrfTokenService { return csrf })
-
-							templateOptions = append(
-								templateOptions,
-								http.WithCsrfTemplateFuncMap(csrf),
-							)
-						}
-
-						if len(conf.Template.Templates) > 0 {
-							templateOptions = append(
-								templateOptions,
-								template.WithConfig(conf.Template),
-								template.WithProvide(di.Default),
-							)
-							template.New("root", templateOptions...)
-						}
-
-						//
-
-						options = append(
-							options,
-							http.WithProvide(di.Default),
-							http.WithAddress(address),
-							http.WithMiddleware(middleware...),
-						)
-						options = append(options, extraOptions...)
-
-						//
-
-						if conf.Proxy != nil && conf.Proxy.Enable {
-							var proxyOptions []http.ProxyOption
-							_ = di.Invoke(di.Default, func(po []http.ProxyOption) {
-								proxyOptions = po
-							})
-							options = append(options, http.WithProxy(conf.Proxy, proxyOptions...))
-						}
-
-						//
-
-						options = append(options, http.WithLogAvailableRoutes())
-
-						return http.New(conf, options...).ListenAndServe()
+		c.Commands = append(
+			c.Commands,
+			command(&Command{
+				Name:    "http",
+				Aliases: []string{"ht"},
+				Usage:   "HTTP server tools",
+				Flags: Flags{
+					&StringFlag{
+						Name:    "address",
+						Aliases: []string{"a"},
+						Usage:   "address:port to listen on",
 					},
 				},
-			},
-		})
+				Subcommands: Commands{
+					&Command{
+						Name:    "serve",
+						Aliases: []string{"s"},
+						Usage:   "Run server listener",
+						Action: func(ctx *Context) error {
+							conf := cfg()
+							address := ctx.String("address")
+							if address == "" {
+								address = conf.Address
+							}
+
+							//
+
+							router := http.NewRouter(conf)
+							di.MustProvide(di.Default, func() *http.Router { return router })
+
+							//
+
+							middleware := []http.Middleware{}
+							options := []http.Option{
+								http.WithRouter(router),
+							}
+							templateOptions := []template.Option{}
+
+							//
+
+							// NOTE: buffered response middleware should be first middleware
+							// it is required when you use middleare like Session
+							switch {
+							case conf.Session == nil || !conf.Session.Enable:
+							default:
+								middleware = append(middleware, http.MiddlewareBufferedResponse(conf.BufferedResponse))
+							}
+							middleware = append(
+								middleware,
+								http.MiddlewareTrace(conf.Trace),
+								http.MiddlewareRecover(func() http.RecoverHandler {
+									var errHandler http.RecoverHandler
+									_ = di.Invoke(di.Default, func(handler http.RecoverHandler) {
+										errHandler = handler
+									})
+									return errHandler
+								}),
+							)
+
+							//
+
+							if conf.Metrics.Enable {
+								middleware = append(middleware, http.MiddlewareMetrics(conf.Metrics))
+								options = append(options, http.WithMetricsHandler(metrics.Default))
+							}
+
+							if conf.Session != nil && conf.Session.Enable {
+								sessionService := http.NewSessionService(conf.Session)
+								middleware = append(
+									middleware,
+									http.MiddlewareSession(sessionService),
+								)
+								di.MustProvide(di.Default, func() *http.SessionService { return sessionService })
+							}
+
+							if conf.Csrf != nil && conf.Csrf.Enable {
+								csrf := http.NewCsrfTokenService(conf.Csrf)
+								middleware = append(
+									middleware,
+									http.MiddlewareCsrf(csrf),
+								)
+								di.MustProvide(di.Default, func() *http.CsrfTokenService { return csrf })
+
+								templateOptions = append(
+									templateOptions,
+									http.WithCsrfTemplateFuncMap(csrf),
+								)
+							}
+
+							if len(conf.Template.Templates) > 0 {
+								templateOptions = append(
+									templateOptions,
+									template.WithConfig(conf.Template),
+									template.WithProvide(di.Default),
+								)
+								template.New("root", templateOptions...)
+							}
+
+							//
+
+							options = append(
+								options,
+								http.WithProvide(di.Default),
+								http.WithAddress(address),
+								http.WithMiddleware(middleware...),
+							)
+							options = append(options, extraOptions...)
+
+							//
+
+							if conf.Proxy != nil && conf.Proxy.Enable {
+								var proxyOptions []http.ProxyOption
+								_ = di.Invoke(di.Default, func(po []http.ProxyOption) {
+									proxyOptions = po
+								})
+								options = append(options, http.WithProxy(conf.Proxy, proxyOptions...))
+							}
+
+							//
+
+							options = append(options, http.WithLogAvailableRoutes())
+
+							return http.New(conf, options...).ListenAndServe()
+						},
+					},
+				},
+			}),
+		)
 	}
+}
+
+func WithHttpTools(cfg func() *http.Config, extraOptions ...http.Option) Option {
+	return WithHttpToolsCommand(
+		func(cmd *Command) *Command { return cmd },
+		cfg,
+		extraOptions...,
+	)
 }
 
 func New(options ...Option) *Cli {
