@@ -243,6 +243,9 @@ var (
 //
 
 func (c *TokenConfig) Default() {
+	if c == nil {
+		return
+	}
 	if c.Container == nil {
 		c.Container = &TokenContainerConfig{}
 	}
@@ -255,6 +258,9 @@ func (c *TokenConfig) Default() {
 }
 
 func (c *TokenConfig) Validate() error {
+	if c == nil {
+		return nil
+	}
 	switch TokenEncodeDecoderType(strings.ToLower(c.Encoder)) {
 	case
 		TokenEncodeDecoderTypeRaw,

@@ -105,13 +105,6 @@ func NewToken(c *TokenConfig) *Token {
 
 //
 
-func (c *TokenConfig) Default() {
-	if c.TokenConfig == nil {
-		c.TokenConfig = &crypto.TokenConfig{}
-	}
-	c.TokenConfig.Default()
-}
-
 func (c *TokenConfig) Unwrap() *crypto.TokenConfig {
 	return c.TokenConfig
 }

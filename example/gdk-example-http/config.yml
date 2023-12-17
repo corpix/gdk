@@ -3,15 +3,15 @@ http:
   metrics:
     enable: true
     token: insecure
-  session:
-    enable: true
-    container:
-      ## secretbox is default
-      # type: jwt
-      secretbox:
-        key: d3add3add3add3add3add3add3add3add3add3add3add3add3add3add3add3ad
-      # jwt:
-      #   algorithm: hs256
-      #   key: insecure
-    # validator:
-    #   refresh: 5s
+  # session:
+  #   enable: true
+  #   container:
+  #     ## secretbox is default
+  #     # type: jwt
+  #     secretbox:
+  #       key: d3add3add3add3add3add3add3add3add3add3add3add3add3add3add3add3ad
+  #     # jwt:
+  #     #   algorithm: hs256
+  #     #   key: insecure
+  #   # validator:
+  #   #   refresh: 5s
