@@ -25,6 +25,10 @@ func (e *EncodeDecoderZstd) Encode(buf []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	err = enc.Flush()
+	if err != nil {
+		return nil, err
+	}
 	return e.EncodeDecoderBase64.Encode(w.Bytes())
 }
 
