@@ -177,6 +177,7 @@ const (
 	TokenJwtMapKeyPayload   TokenMapKey = "payload"
 
 	TokenEncodeDecoderTypeRaw    TokenEncodeDecoderType = "raw"
+	TokenEncodeDecoderTypeZstd   TokenEncodeDecoderType = "zstd"
 	TokenEncodeDecoderTypeBase64 TokenEncodeDecoderType = "base64"
 
 	TokenContainerTypeJson      TokenContainerType = "json"
@@ -264,6 +265,7 @@ func (c *TokenConfig) Validate() error {
 	switch TokenEncodeDecoderType(strings.ToLower(c.Encoder)) {
 	case
 		TokenEncodeDecoderTypeRaw,
+		TokenEncodeDecoderTypeZstd,
 		TokenEncodeDecoderTypeBase64:
 	default:
 		return errors.Errorf("unsupported encode decoder %q", c.Encoder)
@@ -1008,6 +1010,8 @@ func NewTokenEncodeDecoder(t string) TokenEncodeDecoder {
 	var e encoding.EncodeDecoder
 	switch TokenEncodeDecoderType(strings.ToLower(t)) {
 	case TokenEncodeDecoderTypeRaw:
+	case TokenEncodeDecoderTypeZstd:
+		e = encoding.NewEncodeDecoderZstd()
 	case TokenEncodeDecoderTypeBase64:
 		e = encoding.NewEncodeDecoderBase64()
 	default:
