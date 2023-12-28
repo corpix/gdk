@@ -9,8 +9,10 @@ require (
 	github.com/cristalhq/jwt/v4 v4.0.1
 	github.com/davecgh/go-spew v1.1.1
 	github.com/felixge/httpsnoop v1.0.3
+	github.com/goccy/go-yaml v1.9.7
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.0
+	github.com/klauspost/compress v1.17.4
 	github.com/mattn/go-isatty v0.0.14
 	github.com/philippgille/gokv v0.6.0
 	github.com/philippgille/gokv/redis v0.6.0
@@ -20,7 +22,7 @@ require (
 	github.com/stretchr/testify v1.7.1
 	github.com/urfave/cli/v2 v2.10.2
 	github.com/vmihailenco/msgpack/v5 v5.3.5
-	go.uber.org/dig v1.14.1
+	go.uber.org/dig v1.17.1
 	golang.org/x/crypto v0.0.0-20220622213112-05595931fe9d
 )
 
@@ -35,13 +37,11 @@ require (
 	github.com/fatih/color v1.10.0 // indirect
 	github.com/getsentry/sentry-go v0.12.0 // indirect
 	github.com/go-redis/redis v6.15.6+incompatible // indirect
-	github.com/goccy/go-yaml v1.9.7 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/huandu/xstrings v1.3.1 // indirect
 	github.com/imdario/mergo v0.3.11 // indirect
 	github.com/kelseyhightower/envconfig v1.4.0 // indirect
-	github.com/klauspost/compress v1.17.4 // indirect
 	github.com/kr/pretty v0.3.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect

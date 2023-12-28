@@ -305,17 +305,10 @@ func WithLogTools(cfg func() *log.Config, extraOptions ...log.Option) Option {
 
 //
 
-const DefaultHttpToolsName = "http"
-
-func withHttpTools(
-	name string,
-	command func(*Command) *Command,
-	cfg func() *http.Config,
-	extraOptions ...http.Option,
-) Option {
+func WithHttpTools(cfg func() *http.Config, extraOptions ...http.Option) Option {
 	return func(c *Cli) {
 		cmd := &Command{
-			Name:  name,
+			Name:  "http",
 			Usage: "HTTP server tools",
 			Flags: Flags{
 				&StringFlag{
@@ -342,7 +335,6 @@ func withHttpTools(
 						di.MustProvide(
 							di.Default,
 							func() *http.Router { return router },
-							di.Name(fmt.Sprintf("%s-router", name)),
 						)
 
 						//
@@ -390,7 +382,6 @@ func withHttpTools(
 							di.MustProvide(
 								di.Default,
 								func() *http.SessionService { return sessionService },
-								di.Name(fmt.Sprintf("%s-session", name)),
 							)
 						}
 
@@ -403,7 +394,6 @@ func withHttpTools(
 							di.MustProvide(
 								di.Default,
 								func() *http.CsrfTokenService { return csrf },
-								di.Name(fmt.Sprintf("%s-csrf", name)),
 							)
 
 							templateOptions = append(
@@ -416,10 +406,7 @@ func withHttpTools(
 							templateOptions = append(
 								templateOptions,
 								template.WithConfig(conf.Template),
-								template.WithProvide(
-									di.Default,
-									di.Name(fmt.Sprintf("%s-template", name)),
-								),
+								template.WithProvide(di.Default),
 							)
 							template.New("root", templateOptions...)
 						}
@@ -428,10 +415,7 @@ func withHttpTools(
 
 						options = append(
 							options,
-							http.WithProvide(
-								di.Default,
-								di.Name(fmt.Sprintf("%s-http", name)),
-							),
+							http.WithProvide(di.Default),
 							http.WithAddress(address),
 							http.WithMiddleware(middleware...),
 						)
@@ -456,30 +440,11 @@ func withHttpTools(
 				},
 			},
 		}
-		if command != nil {
-			cmd = command(cmd)
-		}
 		c.Commands = append(
 			c.Commands,
 			cmd,
 		)
 	}
-}
-
-func WithHttpToolsNamed(name string, cfg func() *http.Config, extraOptions ...http.Option) Option {
-	return withHttpTools(name, nil, cfg, extraOptions...)
-}
-
-func WithHttpToolsCommand(command func(*Command) *Command, cfg func() *http.Config, extraOptions ...http.Option) Option {
-	return withHttpTools(DefaultHttpToolsName, command, cfg, extraOptions...)
-}
-
-func WithHttpTools(cfg func() *http.Config, extraOptions ...http.Option) Option {
-	return WithHttpToolsCommand(
-		func(cmd *Command) *Command { return cmd },
-		cfg,
-		extraOptions...,
-	)
 }
 
 func New(options ...Option) *Cli {
